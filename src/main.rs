@@ -82,12 +82,12 @@ impl Command {
                         .collect::<Vec<_>>()
                 };
                 for r in repos {
-                    log::info!("Applying profile {:?} to {}", profile.name, r);
+                    log::info!("Applying profile {:?} to repository {}", profile.name, r);
                     let mut maker = client.get_label_maker(r, dry_run).await.unwrap();
                     let ops = profile
                         .specs
                         .iter()
-                        .filter_map(|spec| maker.resolve(spec))
+                        .filter_map(|spec| maker.resolve(spec).unwrap())
                         .collect::<Vec<_>>();
                     for op in ops {
                         maker.execute(op).await.unwrap();

@@ -1,4 +1,4 @@
-use crate::labels::{Label, LabelOperation, LabelSpec};
+use crate::labels::*;
 use crate::util::*;
 use csscolorparser::Color;
 use ghrepo::GHRepo;
@@ -173,11 +173,7 @@ impl GitHub {
     ) -> Result<LabelMaker<'_>, RequestError> {
         log::info!("Fetching current labels for {repo} ...");
         let labels_url = urljoin(&self.api_url, [repo.owner(), repo.name(), "labels"]);
-        let labels = self.paginate::<Label>(labels_url.clone()).await?;
-        let labels = labels
-            .into_iter()
-            .map(|lbl| (ICaseStr::new(lbl.name.clone()), lbl))
-            .collect();
+        let labels = LabelSet::from_iter(self.paginate::<Label>(labels_url.clone()).await?);
         Ok(LabelMaker {
             client: self,
             repo,
@@ -197,14 +193,14 @@ struct User {
 pub(crate) struct LabelMaker<'a> {
     client: &'a GitHub,
     repo: GHRepo,
-    labels: HashMap<ICaseStr, Label>,
+    labels: LabelSet,
     labels_url: Url,
     dry_run: bool,
 }
 
 impl<'a> LabelMaker<'a> {
-    pub(crate) fn resolve(&self, spec: &LabelSpec) -> Option<LabelOperation> {
-        todo!()
+    pub(crate) fn resolve(&self, spec: &LabelSpec) -> Result<Option<LabelOperation>, LabelError> {
+        self.labels.resolve(spec)
     }
 
     pub(crate) async fn execute(&mut self, op: LabelOperation) -> Result<(), RequestError> {
@@ -220,8 +216,7 @@ impl<'a> LabelMaker<'a> {
                     .await?;
                 // TODO: Should this do anything if any of the new label's
                 // values are different from what was submitted?
-                self.labels
-                    .insert(ICaseStr::new(created.name.clone()), created);
+                self.labels.add(created);
             }
             LabelOperation::Update {
                 name,
@@ -241,8 +236,7 @@ impl<'a> LabelMaker<'a> {
                     .await?;
                 // TODO: Should this do anything if any of the new values are
                 // different from what was submitted?
-                self.labels
-                    .insert(ICaseStr::new(updated.name.clone()), updated);
+                self.labels.add(updated);
             }
         }
         Ok(())

@@ -21,6 +21,7 @@ csscolorparser = { version = "0.6.2", features = ["serde"] }
 fern = "0.6.2"
 ghrepo = { version = "0.5.0", default-features = false }
 indenter = "0.3.3"
+itertools = "0.11.0"
 log = "0.4.20"
 mime = "0.3.17"
 parse_link_header = { version = "0.3.3", features = ["url"] }
