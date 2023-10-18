@@ -1,8 +1,7 @@
 use crate::labels::{ColorSpec, LabelSpec, OnRenameClash};
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::collections::HashMap;
-
-static DEFAULT_PROFILE: &str = "default";
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Config {
@@ -35,12 +34,13 @@ pub(crate) struct Profile {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct TopOptions {
-    // TODO: Default this to DEFAULT_PROFILE
-    profile: Option<String>,
+    #[serde(default = "default_profile")]
+    profile: String,
     #[serde(flatten)]
     options: PartialLabelOptions,
 }
 
+#[skip_serializing_none]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct PartialLabelOptions {
@@ -66,4 +66,8 @@ pub(crate) struct PartialLabelSpec {
     rename_from: Vec<String>,
     #[serde(flatten)]
     options: PartialLabelOptions,
+}
+
+fn default_profile() -> String {
+    String::from("default")
 }
