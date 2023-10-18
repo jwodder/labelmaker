@@ -346,8 +346,70 @@ where
     I::Item: AsRef<str>,
 {
     let mut url = url.clone();
+    // We have to convert to an owned String so that we're not trying to modify
+    // `url` with something immutably borrowed from it.
+    if let Some(p) = url
+        .path()
+        .strip_suffix('/')
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+    {
+        url.set_path(&p);
+    }
     url.path_segments_mut()
         .expect("API URL should be able to be a base")
         .extend(segments);
     url
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case("https://api.github.com")]
+    #[case("https://api.github.com/")]
+    fn test_urljoin_nopath(#[case] base: Url) {
+        let u = urljoin(&base, ["foo"]);
+        assert_eq!(u.as_str(), "https://api.github.com/foo");
+        let u = urljoin(&base, ["foo", "bar"]);
+        assert_eq!(u.as_str(), "https://api.github.com/foo/bar");
+    }
+
+    #[rstest]
+    #[case("https://api.github.com/foo/bar")]
+    #[case("https://api.github.com/foo/bar/")]
+    fn test_urljoin_path(#[case] base: Url) {
+        let u = urljoin(&base, ["gnusto"]);
+        assert_eq!(u.as_str(), "https://api.github.com/foo/bar/gnusto");
+        let u = urljoin(&base, ["gnusto", "cleesh"]);
+        assert_eq!(u.as_str(), "https://api.github.com/foo/bar/gnusto/cleesh");
+    }
+
+    #[test]
+    fn test_serialize_update_label_color() {
+        let update = UpdateLabel {
+            new_name: None,
+            color: Some("red".parse().unwrap()),
+            description: None,
+        };
+        assert_eq!(
+            serde_json::to_string(&update).unwrap(),
+            r#"{"color":"ff0000"}"#
+        );
+    }
+
+    #[test]
+    fn test_serialize_update_label_no_color() {
+        let update = UpdateLabel {
+            new_name: Some(String::from("foo")),
+            color: None,
+            description: None,
+        };
+        assert_eq!(
+            serde_json::to_string(&update).unwrap(),
+            r#"{"new_name":"foo"}"#
+        );
+    }
 }
