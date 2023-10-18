@@ -1,6 +1,9 @@
 use crate::config::{PartialLabelOptions, PartialLabelSpec};
+use crate::util::{color2rgbhex, serialize_color};
 use csscolorparser::Color;
+use ghrepo::GHRepo;
 use serde::{Deserialize, Serialize, Serializer};
+use std::fmt;
 
 // These are the "default colors" listed when creating a label via GitHub's web
 // UI as of 2023-09-24:
@@ -26,7 +29,7 @@ static DEFAULT_COLORS: &[(u8, u8, u8)] = &[
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Label {
     pub(crate) name: String,
-    #[serde(serialize_with = "color2rgbhex")]
+    #[serde(serialize_with = "serialize_color")]
     pub(crate) color: Color,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) description: Option<String>,
@@ -41,6 +44,81 @@ pub(crate) enum LabelOperation {
         color: Option<Color>,
         description: Option<String>,
     },
+}
+
+impl LabelOperation {
+    pub(crate) fn as_log_message<'a>(
+        &'a self,
+        repo: &'a GHRepo,
+        dry_run: bool,
+    ) -> LabelOperationMessage<'a> {
+        LabelOperationMessage {
+            op: self,
+            repo,
+            dry_run,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LabelOperationMessage<'a> {
+    op: &'a LabelOperation,
+    repo: &'a GHRepo,
+    dry_run: bool,
+}
+
+impl<'a> fmt::Display for LabelOperationMessage<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.op {
+            LabelOperation::Create(label) => {
+                if self.dry_run {
+                    write!(f, "Would create ")?;
+                } else {
+                    write!(f, "Creating ")?;
+                }
+                write!(
+                    f,
+                    "label {:?} in {} (color: {:?}, description: {:?})",
+                    label.name,
+                    self.repo,
+                    color2rgbhex(&label.color),
+                    label.description.as_deref().unwrap_or_default()
+                )?;
+            }
+            LabelOperation::Update {
+                name,
+                new_name,
+                color,
+                description,
+            } => {
+                if self.dry_run {
+                    write!(f, "Would update ")?;
+                } else {
+                    write!(f, "Updating ")?;
+                }
+                write!(f, "label {:?} in {} (", name, self.repo)?;
+                let mut first = true;
+                if let Some(n) = new_name.as_ref() {
+                    write!(f, "new name: {n:?}")?;
+                    first = false;
+                }
+                if let Some(c) = color.as_ref() {
+                    if !std::mem::replace(&mut first, false) {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "color: {:?}", color2rgbhex(c))?;
+                }
+                if let Some(d) = description.as_ref() {
+                    if !std::mem::replace(&mut first, false) {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "description: {d:?}")?;
+                }
+                write!(f, ")")?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -115,12 +193,6 @@ impl Default for ColorSpec {
     }
 }
 
-fn color2rgbhex<S: Serializer>(color: &Color, serializer: S) -> Result<S::Ok, S::Error> {
-    let [r, g, b, _] = color.to_rgba8();
-    let s = format!("{:02x}{:02x}{:02x}", r, g, b);
-    s.serialize(serializer)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,7 +200,7 @@ mod tests {
 
     #[derive(Clone, Debug, PartialEq, Serialize)]
     struct ColorContainer {
-        #[serde(serialize_with = "color2rgbhex")]
+        #[serde(serialize_with = "serialize_color")]
         color: Color,
     }
 

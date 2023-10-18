@@ -1,6 +1,8 @@
+use csscolorparser::Color;
 use indenter::indented;
 use mime::{Mime, JSON};
 use reqwest::{Method, Response, StatusCode};
+use serde::{Serialize, Serializer};
 use std::fmt::{self, Write};
 use url::Url;
 
@@ -51,4 +53,23 @@ pub(crate) fn is_json_response(r: &Response) -> bool {
             ct.type_() == "application" && (ct.subtype() == "json" || ct.suffix() == Some(JSON))
         })
         .unwrap_or(false)
+}
+
+pub(crate) fn color2rgbhex(color: &Color) -> String {
+    let [r, g, b, _] = color.to_rgba8();
+    format!("{:02x}{:02x}{:02x}", r, g, b)
+}
+
+pub(crate) fn serialize_color<S: Serializer>(
+    color: &Color,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    color2rgbhex(color).serialize(serializer)
+}
+
+pub(crate) fn serialize_option_color<S: Serializer>(
+    color: &Option<Color>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    color.as_ref().map(color2rgbhex).serialize(serializer)
 }

@@ -83,7 +83,7 @@ impl Command {
                 };
                 for r in repos {
                     log::info!("Applying profile {:?} to {}", profile.name, r);
-                    let maker = client.get_label_maker(r, dry_run).await.unwrap();
+                    let mut maker = client.get_label_maker(r, dry_run).await.unwrap();
                     let ops = profile
                         .specs
                         .iter()

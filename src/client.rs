@@ -1,5 +1,6 @@
 use crate::labels::{Label, LabelOperation, LabelSpec};
 use crate::util::*;
+use csscolorparser::Color;
 use ghrepo::GHRepo;
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, InvalidHeaderValue},
@@ -7,6 +8,7 @@ use reqwest::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{to_string_pretty, value::Value};
+use serde_with::skip_serializing_none;
 use std::collections::HashMap;
 use std::env::{var, VarError};
 use std::process::{Command, Stdio};
@@ -55,14 +57,7 @@ impl GitHub {
         Ok(GitHub { client, api_url })
     }
 
-    fn mkurl(&self, path: &str) -> Result<Url, RequestError> {
-        self.api_url.join(path).map_err(|source| RequestError::Url {
-            path: path.to_string(),
-            source,
-        })
-    }
-
-    async fn request<T: Serialize>(
+    async fn raw_request<T: Serialize>(
         &self,
         method: reqwest::Method,
         url: Url,
@@ -100,16 +95,27 @@ impl GitHub {
         }
     }
 
-    async fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, RequestError> {
-        let r = self.request::<()>(Method::GET, url.clone(), None).await?;
-        match r.json::<T>().await {
+    async fn request<T: Serialize, U: DeserializeOwned>(
+        &self,
+        method: reqwest::Method,
+        url: Url,
+        payload: Option<&T>,
+    ) -> Result<U, RequestError> {
+        let r = self
+            .raw_request::<T>(method.clone(), url.clone(), payload)
+            .await?;
+        match r.json::<U>().await {
             Ok(val) => Ok(val),
             Err(source) => Err(RequestError::Deserialize {
-                method: Method::GET,
+                method,
                 url,
                 source,
             }),
         }
+    }
+
+    async fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, RequestError> {
+        self.request::<(), T>(Method::GET, url, None).await
     }
 
     async fn post<T: Serialize, U: DeserializeOwned>(
@@ -117,23 +123,24 @@ impl GitHub {
         url: Url,
         payload: &T,
     ) -> Result<U, RequestError> {
-        let r = self
-            .request::<T>(Method::POST, url.clone(), Some(payload))
-            .await?;
-        match r.json::<U>().await {
-            Ok(val) => Ok(val),
-            Err(source) => Err(RequestError::Deserialize {
-                method: Method::POST,
-                url,
-                source,
-            }),
-        }
+        self.request::<T, U>(Method::POST, url, Some(payload)).await
+    }
+
+    async fn patch<T: Serialize, U: DeserializeOwned>(
+        &self,
+        url: Url,
+        payload: &T,
+    ) -> Result<U, RequestError> {
+        self.request::<T, U>(Method::PATCH, url, Some(payload))
+            .await
     }
 
     async fn paginate<T: DeserializeOwned>(&self, mut url: Url) -> Result<Vec<T>, RequestError> {
         let mut items = Vec::new();
         loop {
-            let r = self.request::<()>(Method::GET, url.clone(), None).await?;
+            let r = self
+                .raw_request::<()>(Method::GET, url.clone(), None)
+                .await?;
             let next_url = get_next_link(&r);
             match r.json::<Vec<T>>().await {
                 Ok(page) => items.extend(page),
@@ -153,7 +160,10 @@ impl GitHub {
     }
 
     pub(crate) async fn whoami(&self) -> Result<String, RequestError> {
-        Ok(self.get::<User>(self.mkurl("/user")?).await?.login)
+        Ok(self
+            .get::<User>(urljoin(&self.api_url, ["user"]))
+            .await?
+            .login)
     }
 
     pub(crate) async fn get_label_maker(
@@ -162,7 +172,7 @@ impl GitHub {
         dry_run: bool,
     ) -> Result<LabelMaker<'_>, RequestError> {
         log::info!("Fetching current labels for {repo} ...");
-        let labels_url = self.mkurl(&format!("/repos/{}/{}/labels", repo.owner(), repo.name()))?;
+        let labels_url = urljoin(&self.api_url, [repo.owner(), repo.name(), "labels"]);
         let labels = self.paginate::<Label>(labels_url.clone()).await?;
         let labels = labels
             .into_iter()
@@ -170,7 +180,9 @@ impl GitHub {
             .collect();
         Ok(LabelMaker {
             client: self,
+            repo,
             labels,
+            labels_url,
             dry_run,
         })
     }
@@ -184,7 +196,9 @@ struct User {
 #[derive(Clone, Debug)]
 pub(crate) struct LabelMaker<'a> {
     client: &'a GitHub,
+    repo: GHRepo,
     labels: HashMap<ICaseStr, Label>,
+    labels_url: Url,
     dry_run: bool,
 }
 
@@ -193,9 +207,56 @@ impl<'a> LabelMaker<'a> {
         todo!()
     }
 
-    pub(crate) async fn execute(&self, op: LabelOperation) -> Result<(), RequestError> {
-        todo!()
+    pub(crate) async fn execute(&mut self, op: LabelOperation) -> Result<(), RequestError> {
+        log::info!("{}", op.as_log_message(&self.repo, self.dry_run));
+        if self.dry_run {
+            return Ok(());
+        }
+        match op {
+            LabelOperation::Create(label) => {
+                let created = self
+                    .client
+                    .post::<Label, Label>(self.labels_url.clone(), &label)
+                    .await?;
+                // TODO: Should this do anything if any of the new label's
+                // values are different from what was submitted?
+                self.labels
+                    .insert(ICaseStr::new(created.name.clone()), created);
+            }
+            LabelOperation::Update {
+                name,
+                new_name,
+                color,
+                description,
+            } => {
+                let url = urljoin(&self.labels_url, [&name]);
+                let payload = UpdateLabel {
+                    new_name,
+                    color,
+                    description,
+                };
+                let updated = self
+                    .client
+                    .patch::<UpdateLabel, Label>(url, &payload)
+                    .await?;
+                // TODO: Should this do anything if any of the new values are
+                // different from what was submitted?
+                self.labels
+                    .insert(ICaseStr::new(updated.name.clone()), updated);
+            }
+        }
+        Ok(())
     }
+}
+
+#[skip_serializing_none]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub(crate) struct UpdateLabel {
+    pub(crate) new_name: Option<String>,
+    #[serde(serialize_with = "serialize_option_color")]
+    pub(crate) color: Option<Color>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) description: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -277,4 +338,16 @@ pub(crate) enum GHTokenError {
     OutputNotUnicode(#[source] std::str::Utf8Error),
     #[error("failed to find GitHub access token")]
     NotFound,
+}
+
+fn urljoin<I>(url: &Url, segments: I) -> Url
+where
+    I: IntoIterator,
+    I::Item: AsRef<str>,
+{
+    let mut url = url.clone();
+    url.path_segments_mut()
+        .expect("API URL should be able to be a base")
+        .extend(segments);
+    url
 }
