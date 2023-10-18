@@ -199,7 +199,7 @@ pub(crate) struct LabelMaker<'a> {
 }
 
 impl<'a> LabelMaker<'a> {
-    pub(crate) fn resolve(&self, spec: &LabelSpec) -> Result<Option<LabelOperation>, LabelError> {
+    pub(crate) fn resolve(&self, spec: &LabelSpec) -> Result<Vec<LabelResolution>, LabelError> {
         self.labels.resolve(spec)
     }
 

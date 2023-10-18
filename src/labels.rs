@@ -127,6 +127,8 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelSpec {
     pub(crate) name: String,
+    // Invariant: rename_from contains neither duplicates (*modulo* name
+    // casing) nor the same (*modulo* case) string as `name`
     pub(crate) rename_from: Vec<String>,
     pub(crate) options: LabelOptions,
 }
@@ -208,7 +210,7 @@ impl LabelSet {
         self.0.insert(ICaseStr::new(label.name.clone()), label);
     }
 
-    pub(crate) fn resolve(&self, spec: &LabelSpec) -> Result<Option<LabelOperation>, LabelError> {
+    pub(crate) fn resolve(&self, spec: &LabelSpec) -> Result<Vec<LabelResolution>, LabelError> {
         todo!()
     }
 }
@@ -223,6 +225,28 @@ impl FromIterator<Label> for LabelSet {
                 .map(|lbl| (ICaseStr::new(lbl.name.clone()), lbl))
                 .collect(),
         )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum LabelResolution {
+    Operation(LabelOperation),
+    Warning(LabelWarning),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum LabelWarning {
+    RenameClash { label: String, candidate: String },
+}
+
+impl fmt::Display for LabelWarning {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LabelWarning::RenameClash { label, candidate } => write!(
+                f,
+                "label {label:?} exists and so does rename-from candidate {candidate:?}"
+            ),
+        }
     }
 }
 
@@ -311,14 +335,14 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Create(Label {
+                res,
+                [LabelResolution::Operation(LabelOperation::Create(Label {
                     name: String::from("quux"),
                     color: "green".parse().unwrap(),
                     description: Some(String::from("Quux you")),
-                }))
+                }))]
             );
         }
 
@@ -334,14 +358,14 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Create(Label {
+                res,
+                [LabelResolution::Operation(LabelOperation::Create(Label {
                     name: String::from("quux"),
                     color: "UPDATE WITH REPRODUCEABLE TEST OUTPUT".parse().unwrap(),
                     description: None,
-                }))
+                }))]
             );
         }
 
@@ -358,8 +382,8 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            assert_eq!(op, None);
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty());
         }
 
         #[test]
@@ -374,8 +398,8 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            assert_eq!(op, None);
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty());
         }
 
         #[test]
@@ -391,15 +415,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: None,
                     color: Some("purple".parse().unwrap()),
                     description: None,
-                })
+                })]
             );
         }
 
@@ -416,15 +440,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: None,
                     color: None,
                     description: Some(String::from("Just what is a \"foo\", anyway?")),
-                })
+                })]
             );
         }
 
@@ -441,15 +465,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: None,
                     color: Some("silver".parse().unwrap()),
                     description: Some(String::from("What is a foo without its bar?")),
-                })
+                })]
             );
         }
 
@@ -466,8 +490,8 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            assert_eq!(op, None);
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty());
         }
 
         #[rstest]
@@ -486,15 +510,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: Some(String::from("Foo")),
                     color: None,
                     description: None,
-                })
+                })]
             );
         }
 
@@ -512,15 +536,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: Some(String::from("Foo")),
                     color: None,
                     description: Some(String::from("What is a foo without its bar?")),
-                })
+                })]
             );
         }
 
@@ -538,15 +562,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: Some(String::from("Foo")),
                     color: None,
                     description: None,
-                })
+                })]
             );
         }
 
@@ -566,8 +590,8 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            assert_eq!(op, None);
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty());
         }
 
         #[test]
@@ -584,15 +608,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: None,
                     color: None,
                     description: Some(String::from("What is a foo without its bar?")),
-                })
+                })]
             );
         }
 
@@ -611,15 +635,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: Some(String::from("quux")),
                     color: None,
                     description: None,
-                })
+                })]
             );
         }
 
@@ -636,15 +660,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: Some(String::from("quux")),
                     color: Some("magenta".parse().unwrap()),
                     description: None,
-                })
+                })]
             );
         }
 
@@ -661,15 +685,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: Some(String::from("quux")),
                     color: None,
                     description: None,
-                })
+                })]
             );
         }
 
@@ -688,15 +712,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: Some(String::from("quux")),
                     color: None,
                     description: None,
-                })
+                })]
             );
         }
 
@@ -767,8 +791,8 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            assert_eq!(op, None);
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty());
         }
 
         #[test]
@@ -784,8 +808,21 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            todo!("How should the warning be represented?")
+            let res = labels.resolve(&spec).unwrap();
+            assert_eq!(
+                res,
+                [LabelResolution::Warning(LabelWarning::RenameClash {
+                    label: String::from("foo"),
+                    candidate: String::from("BAR"),
+                })]
+            );
+            let LabelResolution::Warning(ref warn) = res[0] else {
+                unreachable!();
+            };
+            assert_eq!(
+                warn.to_string(),
+                r#"label "foo" exists and so does rename-from candidate "BAR""#
+            );
         }
 
         #[test]
@@ -826,15 +863,15 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
+            let res = labels.resolve(&spec).unwrap();
             assert_eq!(
-                op,
-                Some(LabelOperation::Update {
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
                     name: String::from("foo"),
                     new_name: Some(String::from("Foo")),
                     color: None,
                     description: None,
-                })
+                })]
             );
         }
 
@@ -852,8 +889,29 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            todo!("How should the warning and renaming be represented?")
+            let res = labels.resolve(&spec).unwrap();
+            assert_eq!(
+                res,
+                vec![
+                    LabelResolution::Operation(LabelOperation::Update {
+                        name: String::from("foo"),
+                        new_name: Some(String::from("Foo")),
+                        color: None,
+                        description: None,
+                    }),
+                    LabelResolution::Warning(LabelWarning::RenameClash {
+                        label: String::from("foo"),
+                        candidate: String::from("BAR"),
+                    }),
+                ]
+            );
+            let LabelResolution::Warning(ref warn) = res[1] else {
+                unreachable!();
+            };
+            assert_eq!(
+                warn.to_string(),
+                r#"label "foo" exists and so does rename-from candidate "BAR""#
+            );
         }
 
         #[test]
@@ -892,8 +950,8 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            assert_eq!(op, None);
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty());
         }
 
         #[test]
@@ -907,8 +965,8 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            assert_eq!(op, None);
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty());
         }
 
         #[test]
@@ -926,8 +984,8 @@ mod tests {
                     ..LabelOptions::default()
                 },
             };
-            let op = labels.resolve(&spec).unwrap();
-            assert_eq!(op, None);
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty());
         }
     }
 }
