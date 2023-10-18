@@ -1,7 +1,6 @@
 use crate::config::{PartialLabelOptions, PartialLabelSpec};
 use csscolorparser::Color;
 use serde::{Deserialize, Serialize, Serializer};
-use serde_with::{serde_as, DisplayFromStr};
 
 // These are the "default colors" listed when creating a label via GitHub's web
 // UI as of 2023-09-24:
@@ -24,23 +23,9 @@ static DEFAULT_COLORS: &[(u8, u8, u8)] = &[
     (0xFE, 0xF2, 0xC0),
 ];
 
-pub(crate) type LabelName = unicase::UniCase<String>;
-
-pub(crate) trait LabelNameExt {
-    fn from_str(s: &str) -> Self;
-}
-
-impl LabelNameExt for LabelName {
-    fn from_str(s: &str) -> Self {
-        LabelName::new(s.to_string())
-    }
-}
-
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Label {
-    #[serde_as(as = "DisplayFromStr")]
-    name: LabelName,
+    name: String,
     #[serde(serialize_with = "color2rgbhex")]
     color: Color,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,8 +36,8 @@ pub(crate) struct Label {
 pub(crate) enum LabelOperation {
     Create(Label),
     Update {
-        name: LabelName,
-        new_name: Option<LabelName>,
+        name: String,
+        new_name: Option<String>,
         color: Option<Color>,
         description: Option<String>,
     },
@@ -60,8 +45,8 @@ pub(crate) enum LabelOperation {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelSpec {
-    pub(crate) name: LabelName,
-    pub(crate) rename_from: Vec<LabelName>,
+    pub(crate) name: String,
+    pub(crate) rename_from: Vec<String>,
     pub(crate) options: LabelOptions,
 }
 
@@ -141,7 +126,6 @@ mod tests {
     use super::*;
     use rstest::rstest;
 
-    #[serde_as]
     #[derive(Clone, Debug, PartialEq, Serialize)]
     struct ColorContainer {
         #[serde(serialize_with = "color2rgbhex")]

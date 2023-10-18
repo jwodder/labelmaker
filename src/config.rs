@@ -4,6 +4,8 @@ use serde_with::skip_serializing_none;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 use thiserror::Error;
 
+type ICaseStr = unicase::UniCase<String>;
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Config {
     #[serde(default)]
@@ -58,57 +60,59 @@ impl Config {
             .with_overrides(&raw.defaults);
         // TODO: Check for inter-label conflicts!!!
         let mut specs = Vec::with_capacity(raw.label.len());
-        let mut defined_labels = HashSet::<LabelName>::with_capacity(raw.label.len());
-        let mut renamed_from_to = HashMap::<LabelName, LabelName>::new();
+        let mut defined_labels = HashSet::<ICaseStr>::with_capacity(raw.label.len());
+        let mut renamed_from_to = HashMap::<ICaseStr, String>::new();
         for lbl in &raw.label {
             let PartialLabelSpec {
                 name,
                 rename_from,
                 options,
             } = lbl;
-            let name = LabelName::from_str(name);
-            if !defined_labels.insert(name.clone()) {
-                return Err(ConfigError::RepeatedLabel(name.into_inner()));
+            let name = name.to_string();
+            let iname = ICaseStr::new(name.clone());
+            if !defined_labels.insert(iname.clone()) {
+                return Err(ConfigError::RepeatedLabel(name));
             }
-            if let Some(renamer) = renamed_from_to.remove(&name) {
+            if let Some(renamer) = renamed_from_to.remove(&iname) {
                 return Err(ConfigError::LabelRenamed {
-                    label: name.into_inner(),
-                    renamer: renamer.into_inner(),
+                    label: name,
+                    renamer,
                 });
             }
-            let mut ln_rename_from = Vec::with_capacity(rename_from.len());
-            let mut renamed_here = HashSet::<LabelName>::new();
+            let mut rename_from2 = Vec::with_capacity(rename_from.len());
+            let mut renamed_here = HashSet::<ICaseStr>::new();
             for n in rename_from {
-                let key = LabelName::from_str(n);
-                if key == name {
-                    return Err(ConfigError::SelfRename(name.into_inner()));
+                let src = n.to_string();
+                let isrc = ICaseStr::new(src.clone());
+                if isrc == iname {
+                    return Err(ConfigError::SelfRename(name));
                 }
-                if defined_labels.contains(&key) {
+                if defined_labels.contains(&isrc) {
                     return Err(ConfigError::LabelRenamed {
-                        label: key.into_inner(),
-                        renamer: name.into_inner(),
+                        label: src,
+                        renamer: name,
                     });
                 }
-                if !renamed_here.insert(key.clone()) {
+                if !renamed_here.insert(isrc.clone()) {
                     continue;
                 }
-                match renamed_from_to.entry(key.clone()) {
+                match renamed_from_to.entry(isrc.clone()) {
                     Entry::Occupied(oc) => {
                         return Err(ConfigError::RenameConflict {
-                            renamed: key.into_inner(),
-                            label1: oc.remove().into_inner(),
-                            label2: name.into_inner(),
+                            renamed: src,
+                            label1: oc.remove(),
+                            label2: name,
                         });
                     }
                     Entry::Vacant(vac) => {
                         vac.insert(name.clone());
                     }
                 }
-                ln_rename_from.push(key);
+                rename_from2.push(src);
             }
             specs.push(LabelSpec {
                 name,
-                rename_from: ln_rename_from,
+                rename_from: rename_from2,
                 options: settings.with_overrides(options),
             });
         }
@@ -210,7 +214,7 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: LabelName::from_str("foo"),
+                    name: String::from("foo"),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
@@ -222,7 +226,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: LabelName::from_str("bar"),
+                    name: String::from("bar"),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("blue".parse().unwrap()),
@@ -270,7 +274,7 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: LabelName::from_str("gnusto"),
+                    name: String::from("gnusto"),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("yellow".parse().unwrap()),
@@ -282,7 +286,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: LabelName::from_str("cleesh"),
+                    name: String::from("cleesh"),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("green".parse().unwrap()),
@@ -321,7 +325,7 @@ mod tests {
             profile.specs,
             [
                 LabelSpec {
-                    name: LabelName::from_str("gnusto"),
+                    name: String::from("gnusto"),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("yellow".parse().unwrap()),
@@ -333,7 +337,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: LabelName::from_str("cleesh"),
+                    name: String::from("cleesh"),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("green".parse().unwrap()),
@@ -387,7 +391,7 @@ mod tests {
         assert_eq!(
             default.specs,
             [LabelSpec {
-                name: LabelName::from_str("foo"),
+                name: String::from("foo"),
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
@@ -404,8 +408,7 @@ mod tests {
         assert_eq!(
             custom.specs,
             [LabelSpec {
-                // TODO: Assert that the name is actually cased like this:
-                name: LabelName::from_str("Foo"),
+                name: String::from("Foo"),
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("blue".parse().unwrap()),
@@ -512,8 +515,8 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: LabelName::from_str("foo"),
-                    rename_from: vec![LabelName::from_str("food"), LabelName::from("drink")],
+                    name: String::from("foo"),
+                    rename_from: vec![String::from("food"), String::from("drink")],
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
                         description: String::from("Foo all the bars"),
@@ -524,7 +527,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: LabelName::from_str("bar"),
+                    name: String::from("bar"),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("blue".parse().unwrap()),
