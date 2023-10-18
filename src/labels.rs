@@ -1,3 +1,4 @@
+use crate::config::{PartialLabelOptions, PartialLabelSpec};
 use csscolorparser::Color;
 use serde::{Deserialize, Serialize};
 
@@ -34,6 +35,12 @@ pub(crate) struct LabelSpec {
     options: LabelOptions,
 }
 
+impl LabelSpec {
+    fn merged_with(&self, pspec: &PartialLabelSpec) -> LabelSpec {
+        todo!()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelOptions {
     create: bool,
@@ -44,14 +51,22 @@ pub(crate) struct LabelOptions {
     enforce_case: bool,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+impl LabelOptions {
+    fn merged_with(&self, popt: &PartialLabelOptions) -> LabelOptions {
+        todo!()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub(crate) enum OnRenameClash {
     Ignore,
     Warn,
     Error,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(untagged)]
 pub(crate) enum ColorSpec {
     Fixed(Color),
     Random(Vec<Color>),
