@@ -1,0 +1,19 @@
+[package]
+name = "labelmaker"
+version = "0.1.0-dev"
+edition = "2021"
+rust-version = "1.65"
+description = "Create & enforce sets of labels in GitHub repositories"
+authors = ["John Thorvald Wodder II <labelmaker@varonathe.org>"]
+repository = "https://github.com/jwodder/labelmaker"
+documentation = "https://github.com/jwodder/labelmaker"
+license = "MIT"
+keywords = []
+# See <https://crates.io/category_slugs> for a list of categories
+categories = []
+exclude = ["/.*"]
+
+[dependencies]
+csscolorparser = { version = "0.6.2", features = ["serde"] }
+ghrepo = "0.5.0"
+serde = { version = "1.0.189", features = ["derive"] }
