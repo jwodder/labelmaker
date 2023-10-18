@@ -401,7 +401,7 @@ mod tests {
                     on_rename_clash: OnRenameClash::default(),
                     enforce_case: true,
                 }
-            },]
+            }]
         );
         let custom = cfg.get_profile("custom").unwrap();
         assert_eq!(custom.name, "custom");
@@ -418,7 +418,7 @@ mod tests {
                     on_rename_clash: OnRenameClash::default(),
                     enforce_case: true,
                 }
-            },]
+            }]
         );
     }
 
@@ -563,14 +563,319 @@ mod tests {
         });
     }
 
-    // labels set some options
-    // [defaults] sets some options
-    // [defaults] sets some options, labels set an overlap
-    // [profile.*.defaults] sets some options
-    // [profile.*.defaults] sets some options, labels set an overlap
-    // [defaults], [profile.*.defaults], and label set overlapping options
+    #[test]
+    fn test_more_options() {
+        let s = indoc! {r#"
+            [[profile.default.label]]
+            name = "foo"
+            description = "Foo all the bars"
+            create = false
+            on-rename-clash = "warn"
 
-    // different profiles have different defaults
-    // default color spec
-    // list color spec
+            [[profile.default.label]]
+            name = "bar"
+            color = "blue"
+            update = false
+            enforce-case = false
+            on-rename-clash = "ignore"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let defprofile = cfg.get_default_profile().unwrap();
+        assert_eq!(defprofile.name, "default");
+        assert_eq!(
+            defprofile.specs,
+            [
+                LabelSpec {
+                    name: String::from("foo"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::default(),
+                        description: String::from("Foo all the bars"),
+                        create: false,
+                        update: true,
+                        on_rename_clash: OnRenameClash::Warn,
+                        enforce_case: true,
+                    }
+                },
+                LabelSpec {
+                    name: String::from("bar"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("blue".parse().unwrap()),
+                        description: String::new(),
+                        create: true,
+                        update: false,
+                        on_rename_clash: OnRenameClash::Ignore,
+                        enforce_case: false,
+                    }
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_defaults() {
+        let s = indoc! {r#"
+            [defaults]
+            color = "cccccc"
+            create = false
+
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+
+            [[profile.default.label]]
+            name = "bar"
+            description = "Bar all the foos"
+            create = true
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let defprofile = cfg.get_default_profile().unwrap();
+        assert_eq!(defprofile.name, "default");
+        assert_eq!(
+            defprofile.specs,
+            [
+                LabelSpec {
+                    name: String::from("foo"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("red".parse().unwrap()),
+                        description: String::from("Foo all the bars"),
+                        create: false,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+                LabelSpec {
+                    name: String::from("bar"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("#cccccc".parse().unwrap()),
+                        description: String::from("Bar all the foos"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_profile_defaults() {
+        let s = indoc! {r#"
+            [profile.default.defaults]
+            color = "cccccc"
+            create = false
+
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+
+            [[profile.default.label]]
+            name = "bar"
+            description = "Bar all the foos"
+            create = true
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let defprofile = cfg.get_default_profile().unwrap();
+        assert_eq!(defprofile.name, "default");
+        assert_eq!(
+            defprofile.specs,
+            [
+                LabelSpec {
+                    name: String::from("foo"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("red".parse().unwrap()),
+                        description: String::from("Foo all the bars"),
+                        create: false,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+                LabelSpec {
+                    name: String::from("bar"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("#cccccc".parse().unwrap()),
+                        description: String::from("Bar all the foos"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_defaults_and_profile_defaults() {
+        let s = indoc! {r#"
+            [defaults]
+            color = ["red", "green", "blue"]
+            description = "This is a label."
+            on-rename-clash = "error"
+            enforce-case = false
+
+            [profile.default.defaults]
+            enforce-case = true
+            update = false
+
+            [[profile.default.label]]
+            name = "foo"
+            description = "Foo all the bars"
+            create = false
+            update = true
+
+            [[profile.default.label]]
+            name = "bar"
+            color = "orange"
+            on-rename-clash = "warn"
+            enforce-case = false
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let defprofile = cfg.get_default_profile().unwrap();
+        assert_eq!(defprofile.name, "default");
+        assert_eq!(
+            defprofile.specs,
+            [
+                LabelSpec {
+                    name: String::from("foo"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Random(vec![
+                            "red".parse().unwrap(),
+                            "green".parse().unwrap(),
+                            "blue".parse().unwrap(),
+                        ]),
+                        description: String::from("Foo all the bars"),
+                        create: false,
+                        update: true,
+                        on_rename_clash: OnRenameClash::Error,
+                        enforce_case: true,
+                    }
+                },
+                LabelSpec {
+                    name: String::from("bar"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("orange".parse().unwrap()),
+                        description: String::from("This is a label."),
+                        create: true,
+                        update: false,
+                        on_rename_clash: OnRenameClash::Warn,
+                        enforce_case: false,
+                    }
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_different_profiles_different_defaults() {
+        let s = indoc! {r#"
+            [defaults]
+            color = ["red", "green", "blue"]
+            update = false
+            enforce-case = false
+
+            [profile.default.defaults]
+            color = "white"
+            update = true
+
+            [[profile.default.label]]
+            name = "foo"
+            color = ["blue", "yellow", "purple"]
+            description = "Foo all the bars"
+
+            [profile.custom.defaults]
+            create = false
+
+            [[profile.custom.label]]
+            name = "Foo"
+            description = "Bar all the foos"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let default = cfg.get_profile("default").unwrap();
+        assert_eq!(default.name, "default");
+        assert_eq!(
+            default.specs,
+            [LabelSpec {
+                name: String::from("foo"),
+                rename_from: Vec::new(),
+                options: LabelOptions {
+                    color: ColorSpec::Random(vec![
+                        "blue".parse().unwrap(),
+                        "yellow".parse().unwrap(),
+                        "purple".parse().unwrap(),
+                    ]),
+                    description: String::from("Foo all the bars"),
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::default(),
+                    enforce_case: false,
+                }
+            }]
+        );
+        let custom = cfg.get_profile("custom").unwrap();
+        assert_eq!(custom.name, "custom");
+        assert_eq!(
+            custom.specs,
+            [LabelSpec {
+                name: String::from("Foo"),
+                rename_from: Vec::new(),
+                options: LabelOptions {
+                    color: ColorSpec::Random(vec![
+                        "red".parse().unwrap(),
+                        "green".parse().unwrap(),
+                        "blue".parse().unwrap(),
+                    ]),
+                    description: String::from("Bar all the foos"),
+                    create: false,
+                    update: false,
+                    on_rename_clash: OnRenameClash::default(),
+                    enforce_case: false,
+                }
+            }]
+        );
+    }
+
+    #[test]
+    fn test_ignored_defaults() {
+        let s = indoc! {r#"
+            [profile.default.defaults]
+            profile = "custom"
+            rename-from = ["bar"]
+
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let defprofile = cfg.get_default_profile().unwrap();
+        assert_eq!(defprofile.name, "default");
+        assert_eq!(
+            defprofile.specs,
+            [LabelSpec {
+                name: String::from("foo"),
+                rename_from: Vec::new(),
+                options: LabelOptions {
+                    color: ColorSpec::Fixed("red".parse().unwrap()),
+                    description: String::from("Foo all the bars"),
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::default(),
+                    enforce_case: true,
+                }
+            }]
+        );
+    }
 }
