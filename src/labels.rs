@@ -24,7 +24,7 @@ static DEFAULT_COLORS: &[(u8, u8, u8)] = &[
     (0xFE, 0xF2, 0xC0),
 ];
 
-type LabelName = unicase::UniCase<String>;
+pub(crate) type LabelName = unicase::UniCase<String>;
 
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -50,15 +50,9 @@ pub(crate) enum LabelOperation {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelSpec {
-    name: LabelName,
-    rename_from: Vec<LabelName>,
-    options: LabelOptions,
-}
-
-impl LabelSpec {
-    fn merged_with(&self, popt: &PartialLabelOptions) -> LabelSpec {
-        todo!()
-    }
+    pub(crate) name: LabelName,
+    pub(crate) rename_from: Vec<LabelName>,
+    pub(crate) options: LabelOptions,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -72,8 +66,21 @@ pub(crate) struct LabelOptions {
 }
 
 impl LabelOptions {
-    fn merged_with(&self, popt: &PartialLabelOptions) -> LabelOptions {
+    pub(crate) fn with_overrides(&self, popt: &PartialLabelOptions) -> LabelOptions {
         todo!()
+    }
+}
+
+impl Default for LabelOptions {
+    fn default() -> LabelOptions {
+        LabelOptions {
+            create: true,
+            update: true,
+            color: ColorSpec::default(),
+            description: String::new(),
+            on_rename_clash: OnRenameClash::default(),
+            enforce_case: true,
+        }
     }
 }
 

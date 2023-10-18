@@ -24,6 +24,7 @@ log = "0.4.20"
 patharg = "0.3.0"
 serde = { version = "1.0.189", features = ["derive"] }
 serde_with = "3.4.0"
+thiserror = "1.0.49"
 unicase = "2.7.0"
 url = "2.4.1"
 
