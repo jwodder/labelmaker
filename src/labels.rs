@@ -56,7 +56,7 @@ pub(crate) struct LabelSpec {
 }
 
 impl LabelSpec {
-    fn merged_with(&self, pspec: &PartialLabelSpec) -> LabelSpec {
+    fn merged_with(&self, popt: &PartialLabelOptions) -> LabelSpec {
         todo!()
     }
 }
@@ -77,10 +77,11 @@ impl LabelOptions {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum OnRenameClash {
     Ignore,
+    #[default]
     Warn,
     Error,
 }
