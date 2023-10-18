@@ -26,6 +26,16 @@ static DEFAULT_COLORS: &[(u8, u8, u8)] = &[
 
 pub(crate) type LabelName = unicase::UniCase<String>;
 
+pub(crate) trait LabelNameExt {
+    fn from_str(s: &str) -> Self;
+}
+
+impl LabelNameExt for LabelName {
+    fn from_str(s: &str) -> Self {
+        LabelName::new(s.to_string())
+    }
+}
+
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Label {
@@ -57,12 +67,12 @@ pub(crate) struct LabelSpec {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelOptions {
-    create: bool,
-    update: bool,
-    color: ColorSpec,
-    description: String,
-    on_rename_clash: OnRenameClash,
-    enforce_case: bool,
+    pub(crate) color: ColorSpec,
+    pub(crate) description: String,
+    pub(crate) create: bool,
+    pub(crate) update: bool,
+    pub(crate) on_rename_clash: OnRenameClash,
+    pub(crate) enforce_case: bool,
 }
 
 impl LabelOptions {
@@ -74,10 +84,10 @@ impl LabelOptions {
 impl Default for LabelOptions {
     fn default() -> LabelOptions {
         LabelOptions {
-            create: true,
-            update: true,
             color: ColorSpec::default(),
             description: String::new(),
+            create: true,
+            update: true,
             on_rename_clash: OnRenameClash::default(),
             enforce_case: true,
         }

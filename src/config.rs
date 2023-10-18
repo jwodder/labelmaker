@@ -1,4 +1,4 @@
-use crate::labels::{ColorSpec, LabelName, LabelOptions, LabelSpec, OnRenameClash};
+use crate::labels::*;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
@@ -14,6 +14,8 @@ pub(crate) struct Config {
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub(crate) enum ConfigError {
+    #[error(transparent)]
+    ParseError(#[from] toml::de::Error),
     #[error("profile not found: {0:?}")]
     NoSuchProfile(String),
     #[error("multiple definitions for label {0:?} found in profile")]
@@ -33,6 +35,10 @@ impl Config {
         todo!()
     }
 
+    pub(crate) fn from_toml_string(s: &str) -> Result<Config, ConfigError> {
+        toml::from_str::<Config>(s).map_err(ConfigError::from)
+    }
+
     pub(crate) fn get_profile(&self, name: &str) -> Result<Profile, ConfigError> {
         let Some(raw) = self.profile.get(name) else {
             return Err(ConfigError::NoSuchProfile(name.into()));
@@ -50,7 +56,7 @@ impl Config {
                 rename_from,
                 options,
             } = lbl;
-            let name = LabelName::new(name.to_string());
+            let name = LabelName::from_str(name);
             if let Some(renamer) = renamed_from_to.remove(&name) {
                 return Err(ConfigError::LabelRenamed {
                     label: name.into_inner(),
@@ -59,7 +65,7 @@ impl Config {
             }
             let mut ln_rename_from = Vec::with_capacity(rename_from.len());
             for n in rename_from {
-                let key = LabelName::new(n.to_string());
+                let key = LabelName::from_str(n);
                 if defined_labels.contains(&key) {
                     return Err(ConfigError::LabelRenamed {
                         label: key.into_inner(),
@@ -109,12 +115,21 @@ pub(crate) struct Profile {
     pub(crate) specs: Vec<LabelSpec>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct TopOptions {
     #[serde(default = "default_profile")]
     profile: String,
     #[serde(default, flatten)]
     options: PartialLabelOptions,
+}
+
+impl Default for TopOptions {
+    fn default() -> TopOptions {
+        TopOptions {
+            profile: default_profile(),
+            options: PartialLabelOptions::default(),
+        }
+    }
 }
 
 #[skip_serializing_none]
@@ -149,4 +164,57 @@ pub(crate) struct PartialLabelSpec {
 
 fn default_profile() -> String {
     String::from("default")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use indoc::indoc;
+
+    #[test]
+    fn test_simple_config() {
+        let s = indoc! {r#"
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+
+            [[profile.default.label]]
+            name = "bar"
+            color = "blue"
+            description = "Bar all the foos"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let defprofile = cfg.get_default_profile().unwrap();
+        assert_eq!(defprofile.name, "default");
+        assert_eq!(
+            defprofile.specs,
+            [
+                LabelSpec {
+                    name: LabelName::from_str("foo"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("red".parse().unwrap()),
+                        description: String::from("Foo all the bars"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+                LabelSpec {
+                    name: LabelName::from_str("bar"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("blue".parse().unwrap()),
+                        description: String::from("Bar all the foos"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+            ]
+        );
+    }
 }
