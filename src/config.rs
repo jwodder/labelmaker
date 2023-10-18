@@ -12,14 +12,21 @@ pub(crate) struct Config {
     profile: HashMap<String, RawProfile>,
 }
 
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[derive(Debug, Error)]
 pub(crate) enum ConfigError {
+    #[error("failed to read {path:#}")]
+    Read {
+        path: patharg::InputArg,
+        source: std::io::Error,
+    },
     #[error(transparent)]
-    ParseError(#[from] toml::de::Error),
+    Parse(#[from] toml::de::Error),
     #[error("profile not found: {0:?}")]
     NoSuchProfile(String),
-    #[error("multiple definitions for label {0:?} found in profile")]
+    #[error("multiple definitions for label {0:?} in profile")]
     RepeatedLabel(String),
+    #[error("label {0:?} cannot be renamed from itself")]
+    SelfRename(String),
     #[error("label {label:?} defined but also would be renamed to {renamer:?}")]
     LabelRenamed { label: String, renamer: String },
     #[error("{renamed:?} would be renamed to both {label1:?} and {label2:?}")]
@@ -32,7 +39,10 @@ pub(crate) enum ConfigError {
 
 impl Config {
     pub(crate) fn load(path: patharg::InputArg) -> Result<Config, ConfigError> {
-        todo!()
+        match path.read_to_string() {
+            Ok(s) => Config::from_toml_string(&s),
+            Err(source) => Err(ConfigError::Read { path, source }),
+        }
     }
 
     pub(crate) fn from_toml_string(s: &str) -> Result<Config, ConfigError> {
@@ -57,6 +67,9 @@ impl Config {
                 options,
             } = lbl;
             let name = LabelName::from_str(name);
+            if !defined_labels.insert(name.clone()) {
+                return Err(ConfigError::RepeatedLabel(name.into_inner()));
+            }
             if let Some(renamer) = renamed_from_to.remove(&name) {
                 return Err(ConfigError::LabelRenamed {
                     label: name.into_inner(),
@@ -64,20 +77,27 @@ impl Config {
                 });
             }
             let mut ln_rename_from = Vec::with_capacity(rename_from.len());
+            let mut renamed_here = HashSet::<LabelName>::new();
             for n in rename_from {
                 let key = LabelName::from_str(n);
+                if key == name {
+                    return Err(ConfigError::SelfRename(name.into_inner()));
+                }
                 if defined_labels.contains(&key) {
                     return Err(ConfigError::LabelRenamed {
                         label: key.into_inner(),
                         renamer: name.into_inner(),
                     });
                 }
+                if !renamed_here.insert(key.clone()) {
+                    continue;
+                }
                 match renamed_from_to.entry(key.clone()) {
                     Entry::Occupied(oc) => {
                         return Err(ConfigError::RenameConflict {
                             renamed: key.into_inner(),
-                            label1: name.into_inner(),
-                            label2: oc.remove().into_inner(),
+                            label1: oc.remove().into_inner(),
+                            label2: name.into_inner(),
                         });
                     }
                     Entry::Vacant(vac) => {
@@ -85,12 +105,6 @@ impl Config {
                     }
                 }
                 ln_rename_from.push(key);
-            }
-            // Do this check after the rename-from checks so that a label
-            // that's renamed from itself or a variant casing doesn't get a
-            // false positive.
-            if !defined_labels.insert(name.clone()) {
-                return Err(ConfigError::RepeatedLabel(name.into_inner()));
             }
             specs.push(LabelSpec {
                 name,
@@ -169,6 +183,7 @@ fn default_profile() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
     use indoc::indoc;
 
     #[test]
@@ -185,6 +200,10 @@ mod tests {
             description = "Bar all the foos"
         "#};
         let cfg = Config::from_toml_string(s).unwrap();
+        let r = cfg.get_profile("mine");
+        assert_matches!(r, Err(ConfigError::NoSuchProfile(name)) => {
+            assert_eq!(name, "mine");
+        });
         let defprofile = cfg.get_default_profile().unwrap();
         assert_eq!(defprofile.name, "default");
         assert_eq!(
@@ -217,4 +236,338 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn test_custom_default_profile() {
+        let s = indoc! {r#"
+            [defaults]
+            profile = "mine"
+
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+
+            [[profile.default.label]]
+            name = "bar"
+            color = "blue"
+            description = "Bar all the foos"
+
+            [[profile.mine.label]]
+            name = "gnusto"
+            color = "yellow"
+            description = "Gnu all the stos"
+
+            [[profile.mine.label]]
+            name = "cleesh"
+            color = "green"
+            description = "Clee all the shs"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let defprofile = cfg.get_default_profile().unwrap();
+        assert_eq!(defprofile.name, "mine");
+        assert_eq!(
+            defprofile.specs,
+            [
+                LabelSpec {
+                    name: LabelName::from_str("gnusto"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("yellow".parse().unwrap()),
+                        description: String::from("Gnu all the stos"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+                LabelSpec {
+                    name: LabelName::from_str("cleesh"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("green".parse().unwrap()),
+                        description: String::from("Clee all the shs"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_custom_profile_no_default() {
+        let s = indoc! {r#"
+            [[profile.mine.label]]
+            name = "gnusto"
+            color = "yellow"
+            description = "Gnu all the stos"
+
+            [[profile.mine.label]]
+            name = "cleesh"
+            color = "green"
+            description = "Clee all the shs"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let r = cfg.get_default_profile();
+        assert_matches!(r, Err(ConfigError::NoSuchProfile(name)) => {
+            assert_eq!(name, "default");
+        });
+        let profile = cfg.get_profile("mine").unwrap();
+        assert_eq!(profile.name, "mine");
+        assert_eq!(
+            profile.specs,
+            [
+                LabelSpec {
+                    name: LabelName::from_str("gnusto"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("yellow".parse().unwrap()),
+                        description: String::from("Gnu all the stos"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+                LabelSpec {
+                    name: LabelName::from_str("cleesh"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("green".parse().unwrap()),
+                        description: String::from("Clee all the shs"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_repeated_label() {
+        let s = indoc! {r#"
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+
+            [[profile.default.label]]
+            name = "Foo"
+            color = "blue"
+            description = "Bar all the foos"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let r = cfg.get_default_profile();
+        assert_matches!(r, Err(ConfigError::RepeatedLabel(name)) => {
+            assert_eq!(name, "Foo");
+        });
+    }
+
+    #[test]
+    fn test_repeated_labels_in_different_profiles() {
+        let s = indoc! {r#"
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+
+            [[profile.custom.label]]
+            name = "Foo"
+            color = "blue"
+            description = "Bar all the foos"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let default = cfg.get_profile("default").unwrap();
+        assert_eq!(default.name, "default");
+        assert_eq!(
+            default.specs,
+            [LabelSpec {
+                name: LabelName::from_str("foo"),
+                rename_from: Vec::new(),
+                options: LabelOptions {
+                    color: ColorSpec::Fixed("red".parse().unwrap()),
+                    description: String::from("Foo all the bars"),
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::default(),
+                    enforce_case: true,
+                }
+            },]
+        );
+        let custom = cfg.get_profile("custom").unwrap();
+        assert_eq!(custom.name, "custom");
+        assert_eq!(
+            custom.specs,
+            [LabelSpec {
+                // TODO: Assert that the name is actually cased like this:
+                name: LabelName::from_str("Foo"),
+                rename_from: Vec::new(),
+                options: LabelOptions {
+                    color: ColorSpec::Fixed("blue".parse().unwrap()),
+                    description: String::from("Bar all the foos"),
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::default(),
+                    enforce_case: true,
+                }
+            },]
+        );
+    }
+
+    #[test]
+    fn test_label_previously_renamed() {
+        let s = indoc! {r#"
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+            rename-from = ["bar"]
+
+            [[profile.default.label]]
+            name = "BAR"
+            color = "blue"
+            description = "Bar all the foos"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let r = cfg.get_default_profile();
+        assert_matches!(r, Err(ConfigError::LabelRenamed { label, renamer }) => {
+            assert_eq!(label, "BAR");
+            assert_eq!(renamer, "foo");
+        });
+    }
+
+    #[test]
+    fn test_label_later_renamed() {
+        let s = indoc! {r#"
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+
+            [[profile.default.label]]
+            name = "BAR"
+            color = "blue"
+            description = "Bar all the foos"
+            rename-from = ["foo"]
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let r = cfg.get_default_profile();
+        assert_matches!(r, Err(ConfigError::LabelRenamed { label, renamer }) => {
+            assert_eq!(label, "foo");
+            assert_eq!(renamer, "BAR");
+        });
+    }
+
+    #[test]
+    fn test_label_renamed_twice() {
+        let s = indoc! {r#"
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+            rename-from = ["quux"]
+
+            [[profile.default.label]]
+            name = "BAR"
+            color = "blue"
+            description = "Bar all the foos"
+            rename-from = ["quux"]
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let r = cfg.get_default_profile();
+        assert_matches!(r, Err(ConfigError::RenameConflict {
+            renamed,
+            label1,
+            label2,
+        }) => {
+            assert_eq!(renamed, "quux");
+            assert_eq!(label1, "foo");
+            assert_eq!(label2, "BAR");
+        });
+    }
+
+    #[test]
+    fn test_duplicate_rename_from() {
+        let s = indoc! {r#"
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+            rename-from = ["food", "drink", "Food"]
+
+            [[profile.default.label]]
+            name = "bar"
+            color = "blue"
+            description = "Bar all the foos"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let defprofile = cfg.get_default_profile().unwrap();
+        assert_eq!(defprofile.name, "default");
+        assert_eq!(
+            defprofile.specs,
+            [
+                LabelSpec {
+                    name: LabelName::from_str("foo"),
+                    rename_from: vec![LabelName::from_str("food"), LabelName::from("drink")],
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("red".parse().unwrap()),
+                        description: String::from("Foo all the bars"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+                LabelSpec {
+                    name: LabelName::from_str("bar"),
+                    rename_from: Vec::new(),
+                    options: LabelOptions {
+                        color: ColorSpec::Fixed("blue".parse().unwrap()),
+                        description: String::from("Bar all the foos"),
+                        create: true,
+                        update: true,
+                        on_rename_clash: OnRenameClash::default(),
+                        enforce_case: true,
+                    }
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_rename_from_self() {
+        let s = indoc! {r#"
+            [[profile.default.label]]
+            name = "foo"
+            color = "red"
+            description = "Foo all the bars"
+            rename-from = ["Foo"]
+
+            [[profile.default.label]]
+            name = "bar"
+            color = "blue"
+            description = "Bar all the foos"
+        "#};
+        let cfg = Config::from_toml_string(s).unwrap();
+        let r = cfg.get_default_profile();
+        assert_matches!(r, Err(ConfigError::SelfRename(name)) => {
+            assert_eq!(name, "foo");
+        });
+    }
+
+    // labels set some options
+    // [defaults] sets some options
+    // [defaults] sets some options, labels set an overlap
+    // [profile.*.defaults] sets some options
+    // [profile.*.defaults] sets some options, labels set an overlap
+    // [defaults], [profile.*.defaults], and label set overlapping options
+
+    // different profiles have different defaults
+    // default color spec
+    // list color spec
 }
