@@ -136,12 +136,12 @@ impl Default for TopOptions {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct PartialLabelOptions {
-    create: Option<bool>,
-    update: Option<bool>,
-    color: Option<ColorSpec>,
-    description: Option<String>,
-    on_rename_clash: Option<OnRenameClash>,
-    enforce_case: Option<bool>,
+    pub(crate) create: Option<bool>,
+    pub(crate) update: Option<bool>,
+    pub(crate) color: Option<ColorSpec>,
+    pub(crate) description: Option<String>,
+    pub(crate) on_rename_clash: Option<OnRenameClash>,
+    pub(crate) enforce_case: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

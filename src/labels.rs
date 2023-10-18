@@ -77,7 +77,21 @@ pub(crate) struct LabelOptions {
 
 impl LabelOptions {
     pub(crate) fn with_overrides(&self, popt: &PartialLabelOptions) -> LabelOptions {
-        todo!()
+        LabelOptions {
+            color: popt.color.as_ref().unwrap_or(&self.color).clone(),
+            description: popt
+                .description
+                .as_ref()
+                .unwrap_or(&self.description)
+                .clone(),
+            create: *popt.create.as_ref().unwrap_or(&self.create),
+            update: *popt.update.as_ref().unwrap_or(&self.update),
+            on_rename_clash: *popt
+                .on_rename_clash
+                .as_ref()
+                .unwrap_or(&self.on_rename_clash),
+            enforce_case: *popt.enforce_case.as_ref().unwrap_or(&self.enforce_case),
+        }
     }
 }
 
