@@ -1,6 +1,7 @@
 use crate::config::{PartialLabelOptions, PartialLabelSpec};
 use csscolorparser::Color;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 
 // These are the "default colors" listed when creating a label via GitHub's web
 // UI as of 2023-09-24:
@@ -9,11 +10,16 @@ static DEFAULT_COLORS: &[&str] = &[
     "c5def5", "d4c5f9", "d93f0b", "e99695", "f9d0c4", "fbca04", "fef2c0",
 ];
 
+type LabelName = unicase::UniCase<String>;
+
+#[serde_as]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Label {
-    name: String,
+    #[serde_as(as = "DisplayFromStr")]
+    name: LabelName,
     // TODO: Serialize as "rrggbb" (no alpha, no octothorpe):
     color: Color,
+    #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
 }
 
@@ -21,8 +27,8 @@ pub(crate) struct Label {
 pub(crate) enum LabelOperation {
     Create(Label),
     Update {
-        name: String,
-        new_name: Option<String>,
+        name: LabelName,
+        new_name: Option<LabelName>,
         color: Option<Color>,
         description: Option<String>,
     },
@@ -30,8 +36,8 @@ pub(crate) enum LabelOperation {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelSpec {
-    name: String,
-    rename_from: Vec<String>,
+    name: LabelName,
+    rename_from: Vec<LabelName>,
     options: LabelOptions,
 }
 
