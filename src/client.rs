@@ -5,7 +5,7 @@ use serde::{de::DeserializeOwned, Serialize};
 pub(crate) struct Client;
 
 impl Client {
-    pub(crate) fn new(api_url: &str, token: &str) -> Client {
+    pub(crate) fn new(api_url: url::Url, token: &str) -> Client {
         todo!()
     }
 
@@ -37,7 +37,7 @@ impl Client {
 pub(crate) struct LabelMaker;
 
 impl LabelMaker {
-    pub(crate) fn resolve_spec(&self, spec: LabelSpec) -> Result<LabelOperation, Error> {
+    pub(crate) fn resolve(&self, spec: &LabelSpec) -> Result<Option<LabelOperation>, Error> {
         todo!()
     }
 
@@ -46,4 +46,9 @@ impl LabelMaker {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct Error;
+
+pub(crate) fn get_github_token(api_url: &url::Url) -> Result<String, Error> {
+    todo!()
+}

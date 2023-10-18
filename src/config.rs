@@ -1,4 +1,4 @@
-use crate::labels::{ColorSpec, OnRenameClash};
+use crate::labels::{ColorSpec, LabelSpec, OnRenameClash};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -8,6 +8,29 @@ static DEFAULT_PROFILE: &str = "default";
 pub(crate) struct Config {
     defaults: TopOptions,
     profile: HashMap<String, RawProfile>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Error;
+
+impl Config {
+    pub(crate) fn load(path: patharg::InputArg) -> Result<Config, Error> {
+        todo!()
+    }
+
+    pub(crate) fn get_profile(&self, name: &str) -> Result<Profile, Error> {
+        todo!()
+    }
+
+    pub(crate) fn get_default_profile(&self) -> Result<Profile, Error> {
+        todo!()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Profile {
+    pub(crate) name: String,
+    pub(crate) specs: Vec<LabelSpec>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
