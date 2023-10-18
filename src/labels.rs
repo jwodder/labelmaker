@@ -25,11 +25,11 @@ static DEFAULT_COLORS: &[(u8, u8, u8)] = &[
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Label {
-    name: String,
+    pub(crate) name: String,
     #[serde(serialize_with = "color2rgbhex")]
-    color: Color,
+    pub(crate) color: Color,
     #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
+    pub(crate) description: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

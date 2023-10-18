@@ -2,8 +2,8 @@
 #![allow(unused)]
 mod client;
 mod config;
-mod http_utils;
 mod labels;
+mod util;
 
 use crate::client::{get_github_token, GitHub};
 use crate::config::Config;

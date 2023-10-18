@@ -1,10 +1,9 @@
 use crate::labels::*;
+use crate::util::ICaseStr;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 use thiserror::Error;
-
-type ICaseStr = unicase::UniCase<String>;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Config {

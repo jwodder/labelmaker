@@ -4,6 +4,8 @@ use reqwest::{Method, Response, StatusCode};
 use std::fmt::{self, Write};
 use url::Url;
 
+pub(crate) type ICaseStr = unicase::UniCase<String>;
+
 /// Error raised for a 4xx or 5xx HTTP response that includes the response body
 /// — and, if that body is JSON, it's pretty-printed
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -1,12 +1,13 @@
-use crate::http_utils::*;
-use crate::labels::{LabelOperation, LabelSpec};
+use crate::labels::{Label, LabelOperation, LabelSpec};
+use crate::util::*;
 use ghrepo::GHRepo;
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, InvalidHeaderValue},
     Client, ClientBuilder, Method, Response,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{to_string_pretty, value::Value};
+use std::collections::HashMap;
 use thiserror::Error;
 use url::{ParseError, Url};
 
@@ -142,6 +143,7 @@ impl GitHub {
                     })
                 }
             }
+            // TODO: Simplify this?
             match next_url {
                 Some(u) => url = u,
                 None => return Ok(items),
@@ -150,21 +152,42 @@ impl GitHub {
     }
 
     pub(crate) async fn whoami(&self) -> Result<String, RequestError> {
-        todo!()
+        Ok(self.get::<User>(self.mkurl("/user")?).await?.login)
     }
 
     pub(crate) async fn get_label_maker(
         &self,
         repo: GHRepo,
         dry_run: bool,
-    ) -> Result<LabelMaker, RequestError> {
-        todo!()
+    ) -> Result<LabelMaker<'_>, RequestError> {
+        log::info!("Fetching current labels for {repo} ...");
+        let labels_url = self.mkurl(&format!("/repos/{}/{}/labels", repo.owner(), repo.name()))?;
+        let labels = self.paginate::<Label>(labels_url.clone()).await?;
+        let labels = labels
+            .into_iter()
+            .map(|lbl| (ICaseStr::new(lbl.name.clone()), lbl))
+            .collect();
+        Ok(LabelMaker {
+            client: self,
+            labels,
+            dry_run,
+        })
     }
 }
 
-pub(crate) struct LabelMaker;
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+struct User {
+    login: String,
+}
 
-impl LabelMaker {
+#[derive(Clone, Debug)]
+pub(crate) struct LabelMaker<'a> {
+    client: &'a GitHub,
+    labels: HashMap<ICaseStr, Label>,
+    dry_run: bool,
+}
+
+impl<'a> LabelMaker<'a> {
     pub(crate) fn resolve(&self, spec: &LabelSpec) -> Option<LabelOperation> {
         todo!()
     }
