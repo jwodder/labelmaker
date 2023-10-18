@@ -1,6 +1,6 @@
 use crate::config::{PartialLabelOptions, PartialLabelSpec};
 use csscolorparser::Color;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_with::{serde_as, DisplayFromStr};
 
 // These are the "default colors" listed when creating a label via GitHub's web
@@ -17,7 +17,7 @@ type LabelName = unicase::UniCase<String>;
 pub(crate) struct Label {
     #[serde_as(as = "DisplayFromStr")]
     name: LabelName,
-    // TODO: Serialize as "rrggbb" (no alpha, no octothorpe):
+    #[serde(serialize_with = "color2rgbhex")]
     color: Color,
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
@@ -76,4 +76,36 @@ pub(crate) enum OnRenameClash {
 pub(crate) enum ColorSpec {
     Fixed(Color),
     Random(Vec<Color>),
+}
+
+fn color2rgbhex<S: Serializer>(color: &Color, serializer: S) -> Result<S::Ok, S::Error> {
+    let [r, g, b, _] = color.to_rgba8();
+    let s = format!("{:02x}{:02x}{:02x}", r, g, b);
+    s.serialize(serializer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    #[serde_as]
+    #[derive(Clone, Debug, PartialEq, Serialize)]
+    struct ColorContainer {
+        #[serde(serialize_with = "color2rgbhex")]
+        color: Color,
+    }
+
+    #[rstest]
+    #[case("black", "000000")]
+    #[case("transparent", "000000")]
+    #[case("#CCCCCC", "cccccc")]
+    #[case("#D90DAD80", "d90dad")]
+    #[case("CCC", "cccccc")]
+    #[case("c0c0c0", "c0c0c0")]
+    fn test_color2rgbhex(#[case] color: Color, #[case] s: &str) {
+        let obj = ColorContainer { color };
+        let expected = format!(r#"{{"color":"{s}"}}"#);
+        assert_eq!(serde_json::to_string(&obj).unwrap(), expected);
+    }
 }
