@@ -2,9 +2,10 @@
 #![allow(unused)]
 mod client;
 mod config;
+mod http_utils;
 mod labels;
 
-use crate::client::{get_github_token, Client};
+use crate::client::{get_github_token, GitHub};
 use crate::config::Config;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
@@ -53,7 +54,7 @@ enum Command {
 }
 
 impl Command {
-    fn run(self, client: Client) {
+    async fn run(self, client: GitHub) {
         match self {
             Command::Apply {
                 dry_run,
@@ -67,7 +68,7 @@ impl Command {
                     Some(p) => cfg.get_profile(&p).unwrap(),
                     None => cfg.get_default_profile().unwrap(),
                 };
-                let me = client.whoami().unwrap();
+                let me = client.whoami().await.unwrap();
                 let repos = if repository.is_empty() {
                     let r = LocalRepo::for_cwd()
                         .unwrap()
@@ -82,14 +83,14 @@ impl Command {
                 };
                 for r in repos {
                     log::info!("Applying profile {:?} to {}", profile.name, r);
-                    let maker = client.get_label_maker(r, dry_run).unwrap();
+                    let maker = client.get_label_maker(r, dry_run).await.unwrap();
                     let ops = profile
                         .specs
                         .iter()
-                        .filter_map(|spec| maker.resolve(spec).unwrap())
+                        .filter_map(|spec| maker.resolve(spec))
                         .collect::<Vec<_>>();
                     for op in ops {
-                        maker.execute(op).unwrap();
+                        maker.execute(op).await.unwrap();
                     }
                 }
             }
@@ -97,7 +98,8 @@ impl Command {
     }
 }
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     let Arguments {
         api_url,
         log_level,
@@ -106,8 +108,8 @@ fn main() {
     init_logging(log_level);
     // TODO: Replace unwrap() with `?`:
     let token = get_github_token(&api_url).unwrap();
-    let client = Client::new(api_url, &token);
-    command.run(client);
+    let client = GitHub::new(api_url, &token).unwrap();
+    command.run(client).await;
 }
 
 fn init_logging(log_level: LevelFilter) {

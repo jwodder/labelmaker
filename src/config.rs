@@ -58,7 +58,6 @@ impl Config {
         let settings = LabelOptions::default()
             .with_overrides(&self.defaults.options)
             .with_overrides(&raw.defaults);
-        // TODO: Check for inter-label conflicts!!!
         let mut specs = Vec::with_capacity(raw.label.len());
         let mut defined_labels = HashSet::<ICaseStr>::with_capacity(raw.label.len());
         let mut renamed_from_to = HashMap::<ICaseStr, String>::new();
