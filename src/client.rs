@@ -8,6 +8,8 @@ use reqwest::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{to_string_pretty, value::Value};
 use std::collections::HashMap;
+use std::env::{var, VarError};
+use std::process::{Command, Stdio};
 use thiserror::Error;
 use url::{ParseError, Url};
 
@@ -143,7 +145,6 @@ impl GitHub {
                     })
                 }
             }
-            // TODO: Simplify this?
             match next_url {
                 Some(u) => url = u,
                 None => return Ok(items),
@@ -227,9 +228,53 @@ pub(crate) enum RequestError {
     Status(#[from] Box<PrettyHttpError>),
 }
 
-#[derive(Debug)]
-pub(crate) struct Error;
+pub(crate) fn get_github_token(api_url: &Url) -> Result<String, GHTokenError> {
+    for varname in ["GH_TOKEN", "GITHUB_TOKEN"] {
+        match var(varname) {
+            Ok(s) if !s.is_empty() => return Ok(s),
+            Err(VarError::NotUnicode(_)) => return Err(GHTokenError::EnvVarNotUnicode(varname)),
+            _ => (),
+        }
+    }
+    let Some(host) = api_url.host_str() else {
+        return Err(GHTokenError::NoHost(api_url.clone()));
+    };
+    let out = Command::new("gh")
+        .arg("auth")
+        .arg("token")
+        .arg("--hostname")
+        .arg(host)
+        .stderr(Stdio::inherit())
+        .output();
+    match out {
+        Ok(out) if out.status.success() => match String::from_utf8(out.stdout) {
+            Ok(mut s) => {
+                if s.ends_with('\n') {
+                    s.pop();
+                    if s.ends_with('\r') {
+                        s.pop();
+                    }
+                }
+                if !s.is_empty() {
+                    Ok(s)
+                } else {
+                    Err(GHTokenError::NotFound)
+                }
+            }
+            Err(e) => Err(GHTokenError::OutputNotUnicode(e.utf8_error())),
+        },
+        _ => Err(GHTokenError::NotFound),
+    }
+}
 
-pub(crate) fn get_github_token(api_url: &Url) -> Result<String, Error> {
-    todo!()
+#[derive(Debug, Error)]
+pub(crate) enum GHTokenError {
+    #[error("value of {0} environment variable is not valid Unicode")]
+    EnvVarNotUnicode(&'static str),
+    #[error("GitHub API URL {0} lacks a host")]
+    NoHost(Url),
+    #[error("output from gh command was not valid Unicode")]
+    OutputNotUnicode(#[source] std::str::Utf8Error),
+    #[error("failed to find GitHub access token")]
+    NotFound,
 }
