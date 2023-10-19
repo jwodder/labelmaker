@@ -13,6 +13,7 @@ use ghrepo::{GHRepo, LocalRepo};
 use log::{Level, LevelFilter};
 use std::io;
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 /// Create & enforce sets of labels in GitHub repositories
 ///
@@ -31,6 +32,15 @@ struct Arguments {
 
     #[command(subcommand)]
     command: Command,
+}
+
+impl Arguments {
+    async fn run(self) -> anyhow::Result<()> {
+        init_logging(self.log_level);
+        let token = gh_token::get().context("unable to fetch GitHub access token")?;
+        let client = GitHub::new(&token)?;
+        self.command.run(client).await
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
@@ -151,12 +161,13 @@ impl Command {
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> anyhow::Result<()> {
-    let Arguments { log_level, command } = Arguments::parse();
-    init_logging(log_level);
-    let token = gh_token::get().context("unable to fetch GitHub access token")?;
-    let client = GitHub::new(&token)?;
-    command.run(client).await
+async fn main() -> ExitCode {
+    if let Err(e) = Arguments::parse().run().await {
+        log::error!("{e:?}");
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 fn init_logging(log_level: LevelFilter) {
