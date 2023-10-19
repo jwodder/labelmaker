@@ -3,7 +3,7 @@ mod config;
 mod labels;
 mod util;
 
-use crate::client::{get_github_token, GitHub};
+use crate::client::GitHub;
 use crate::config::Config;
 use crate::labels::LabelResolution;
 use anstream::AutoStream;
@@ -17,14 +17,6 @@ use std::io;
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 #[clap(version)]
 struct Arguments {
-    #[clap(
-        long,
-        value_name = "URL",
-        env = "GITHUB_API_URL",
-        default_value = "https://api.github.com"
-    )]
-    api_url: url::Url,
-
     /// Set logging level
     #[clap(
         short,
@@ -109,14 +101,10 @@ impl Command {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
-    let Arguments {
-        api_url,
-        log_level,
-        command,
-    } = Arguments::parse();
+    let Arguments { log_level, command } = Arguments::parse();
     init_logging(log_level);
-    let token = get_github_token(&api_url).context("unable to fetch GitHub access token")?;
-    let client = GitHub::new(api_url, &token)?;
+    let token = gh_token::get().context("unable to fetch GitHub access token")?;
+    let client = GitHub::new(&token)?;
     command.run(client).await
 }
 
