@@ -4,7 +4,7 @@
 [![Minimum Supported Rust Version](https://img.shields.io/badge/MSRV-1.70-orange)](https://www.rust-lang.org)
 [![MIT License](https://img.shields.io/github/license/jwodder/labelmaker.svg)](https://opensource.org/licenses/MIT)
 
-[GitHub](https://github.com/jwodder/labelmaker) | [crates.io](https://crates.io/crates/labelmaker) | [Issues](https://github.com/jwodder/labelmaker/issues)
+[GitHub](https://github.com/jwodder/labelmaker) | [crates.io](https://crates.io/crates/labelmaker) | [Issues](https://github.com/jwodder/labelmaker/issues) | [Changelog](https://github.com/jwodder/labelmaker/blob/master/CHANGELOG.md)
 
 `labelmaker` is a Rust program for batch creation of [labels][] in GitHub
 repositories, including updating and/or renaming existing labels to meet your
