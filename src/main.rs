@@ -67,7 +67,7 @@ enum Command {
         /// File to output the configuration to.
         ///
         /// Defaults to standard output.
-        #[clap(short, long, default_value_t)]
+        #[clap(short, long, default_value_t, hide_default_value = true)]
         outfile: patharg::OutputArg,
 
         /// Name of the profile to define in the generated configuration file
