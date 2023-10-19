@@ -47,6 +47,18 @@ Global Options
   "`TRACE`" (all case-insensitive).  [default value: `INFO`]
 
 
+Authentication
+--------------
+
+`labelmaker` requires a GitHub access token with appropriate permissions in
+order to run.  Specify the token via the `GH_TOKEN` or `GITHUB_TOKEN`
+environment variable or store it with the [`gh`](https://github.com/cli/cli)
+command.
+
+Note that, if `gh` has stored the token in a system keyring, you may be
+prompted to unlock the keyring.
+
+
 `labelmaker apply`
 ------------------
 
