@@ -698,7 +698,6 @@ dependencies = [
  "log",
  "mime",
  "parse_link_header",
- "patharg",
  "rand",
  "rand_chacha",
  "reqwest",
@@ -865,16 +864,6 @@ dependencies = [
  "lazy_static",
  "regex",
  "url",
-]
-
-[[package]]
-name = "patharg"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd2f5e6070e2afbc2bc942a1b9338a4018f0734fc9ad7293a98af20566645917"
-dependencies = [
- "cfg-if",
- "either",
 ]
 
 [[package]]

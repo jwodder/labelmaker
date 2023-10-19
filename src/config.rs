@@ -3,6 +3,7 @@ use crate::util::ICaseStr;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -15,9 +16,9 @@ pub(crate) struct Config {
 
 #[derive(Debug, Error)]
 pub(crate) enum ConfigError {
-    #[error("failed to read {path:#}")]
+    #[error("failed to read file {}", .path.display())]
     Read {
-        path: patharg::InputArg,
+        path: PathBuf,
         source: std::io::Error,
     },
     #[error(transparent)]
@@ -39,10 +40,13 @@ pub(crate) enum ConfigError {
 }
 
 impl Config {
-    pub(crate) fn load(path: patharg::InputArg) -> Result<Config, ConfigError> {
-        match path.read_to_string() {
+    pub(crate) fn load(path: &Path) -> Result<Config, ConfigError> {
+        match std::fs::read_to_string(path) {
             Ok(s) => Config::from_toml_string(&s),
-            Err(source) => Err(ConfigError::Read { path, source }),
+            Err(source) => Err(ConfigError::Read {
+                path: path.to_owned(),
+                source,
+            }),
         }
     }
 

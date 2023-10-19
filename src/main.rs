@@ -13,6 +13,7 @@ use clap::{Parser, Subcommand};
 use ghrepo::{GHRepo, LocalRepo};
 use log::{Level, LevelFilter};
 use std::io;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 #[clap(version)]
@@ -39,7 +40,7 @@ enum Command {
         #[arg(short = 'P', long, value_name = "NAME")]
         profile: Option<String>,
 
-        config: patharg::InputArg,
+        config: PathBuf,
 
         repository: Vec<String>,
     },
@@ -54,7 +55,7 @@ impl Command {
                 config,
                 repository,
             } => {
-                let cfg = Config::load(config).context("error loading config file")?;
+                let cfg = Config::load(&config).context("error loading config file")?;
                 let profile = match profile {
                     Some(p) => cfg.get_profile(&p)?,
                     None => cfg.get_default_profile()?,
