@@ -9,6 +9,7 @@ use reqwest::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{to_string_pretty, value::Value};
 use serde_with::skip_serializing_none;
+use std::borrow::Borrow;
 use thiserror::Error;
 use url::Url;
 
@@ -188,6 +189,32 @@ struct User {
     login: String,
 }
 
+#[derive(Debug, Error)]
+pub(crate) enum BuildClientError {
+    #[error("could not construct Authorization header value from token")]
+    BadAuthHeader(#[source] InvalidHeaderValue),
+    #[error("failed to initialize HTTP client")]
+    Init(#[source] reqwest::Error),
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum RequestError {
+    #[error("failed to deserialize response body from {method} request to {url}")]
+    Deserialize {
+        method: Method,
+        url: Url,
+        source: reqwest::Error,
+    },
+    #[error("failed to make {method} request to {url}")]
+    Send {
+        method: Method,
+        url: Url,
+        source: reqwest::Error,
+    },
+    #[error(transparent)]
+    Status(#[from] Box<PrettyHttpError>),
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct LabelMaker<'a, R: rand::Rng> {
     client: &'a GitHub,
@@ -198,15 +225,34 @@ pub(crate) struct LabelMaker<'a, R: rand::Rng> {
 }
 
 impl<'a, R: rand::Rng> LabelMaker<'a, R> {
+    pub(crate) async fn make<I>(&mut self, specs: I) -> Result<(), LabelMakerError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<LabelSpec>,
+    {
+        let mut res = Vec::new();
+        for s in specs {
+            res.extend(self.resolve(s.borrow())?);
+        }
+        for r in res {
+            match r {
+                LabelResolution::Operation(op) => {
+                    log::info!("{}", op.as_log_message(&self.repo, self.dry_run));
+                    if !self.dry_run {
+                        self.execute(op).await?;
+                    }
+                }
+                LabelResolution::Warning(wrn) => log::warn!("{wrn}"),
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn resolve(&mut self, spec: &LabelSpec) -> Result<Vec<LabelResolution>, LabelError> {
         self.labels.resolve(spec)
     }
 
     pub(crate) async fn execute(&mut self, op: LabelOperation) -> Result<(), RequestError> {
-        log::info!("{}", op.as_log_message(&self.repo, self.dry_run));
-        if self.dry_run {
-            return Ok(());
-        }
         match op {
             LabelOperation::Create(label) => {
                 let created = self
@@ -244,38 +290,20 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
 
 #[skip_serializing_none]
 #[derive(Clone, Debug, PartialEq, Serialize)]
-pub(crate) struct UpdateLabel {
-    pub(crate) new_name: Option<LabelName>,
+struct UpdateLabel {
+    new_name: Option<LabelName>,
     #[serde(serialize_with = "serialize_option_color")]
-    pub(crate) color: Option<Color>,
+    color: Option<Color>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) description: Option<String>,
+    description: Option<String>,
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum BuildClientError {
-    #[error("could not construct Authorization header value from token")]
-    BadAuthHeader(#[source] InvalidHeaderValue),
-    #[error("failed to initialize HTTP client")]
-    Init(#[source] reqwest::Error),
-}
-
-#[derive(Debug, Error)]
-pub(crate) enum RequestError {
-    #[error("failed to deserialize response body from {method} request to {url}")]
-    Deserialize {
-        method: Method,
-        url: Url,
-        source: reqwest::Error,
-    },
-    #[error("failed to make {method} request to {url}")]
-    Send {
-        method: Method,
-        url: Url,
-        source: reqwest::Error,
-    },
+pub(crate) enum LabelMakerError {
     #[error(transparent)]
-    Status(#[from] Box<PrettyHttpError>),
+    Label(#[from] LabelError),
+    #[error("GitHub API request failed")]
+    Request(#[from] RequestError),
 }
 
 fn urljoin<I>(url: &Url, segments: I) -> Url

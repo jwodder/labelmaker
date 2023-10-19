@@ -5,7 +5,6 @@ mod util;
 
 use crate::client::GitHub;
 use crate::config::Config;
-use crate::labels::LabelResolution;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
 use anyhow::Context;
@@ -79,20 +78,7 @@ impl Command {
                 for r in repos {
                     log::info!("Applying profile {:?} to repository {}", profile.name, r);
                     let mut maker = client.get_label_maker(r, &mut rng, dry_run).await.unwrap();
-                    let mut ops = Vec::with_capacity(profile.specs.len());
-                    for spec in &profile.specs {
-                        for res in maker.resolve(spec).unwrap() {
-                            match res {
-                                LabelResolution::Operation(op) => ops.push(op),
-                                // TODO: Should the warning be delayed to
-                                // execution time?
-                                LabelResolution::Warning(wrn) => log::warn!("{wrn}"),
-                            }
-                        }
-                    }
-                    for op in ops {
-                        maker.execute(op).await.unwrap();
-                    }
+                    maker.make(&profile.specs).await?;
                 }
                 Ok(())
             }
