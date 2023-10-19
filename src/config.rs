@@ -1,5 +1,4 @@
 use crate::labels::*;
-use crate::util::ICaseStr;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
@@ -26,25 +25,28 @@ pub(crate) enum ConfigError {
     #[error("profile not found: {0:?}")]
     NoSuchProfile(String),
     #[error("multiple definitions for label {0:?} in profile")]
-    RepeatedLabel(String),
+    RepeatedLabel(LabelName),
     #[error("label {0:?} cannot be renamed from itself")]
-    SelfRename(String),
+    SelfRename(LabelName),
     #[error("label {label:?} defined but also would be renamed to {renamer:?}")]
-    LabelRenamed { label: String, renamer: String },
+    LabelRenamed {
+        label: LabelName,
+        renamer: LabelName,
+    },
     #[error("{renamed:?} would be renamed to both {label1:?} and {label2:?}")]
     RenameConflict {
-        renamed: String,
-        label1: String,
-        label2: String,
+        renamed: LabelName,
+        label1: LabelName,
+        label2: LabelName,
     },
 }
 
 impl Config {
-    pub(crate) fn load(path: &Path) -> Result<Config, ConfigError> {
-        match std::fs::read_to_string(path) {
+    pub(crate) fn load<P: AsRef<Path>>(path: P) -> Result<Config, ConfigError> {
+        match std::fs::read_to_string(&path) {
             Ok(s) => Config::from_toml_string(&s),
             Err(source) => Err(ConfigError::Read {
-                path: path.to_owned(),
+                path: path.as_ref().to_owned(),
                 source,
             }),
         }
@@ -62,16 +64,16 @@ impl Config {
             .with_overrides(&self.defaults.options)
             .with_overrides(&raw.defaults);
         let mut specs = Vec::with_capacity(raw.labels.len());
-        let mut defined_labels = HashSet::<ICaseStr>::with_capacity(raw.labels.len());
-        let mut renamed_from_to = HashMap::<ICaseStr, String>::new();
+        let mut defined_labels = HashSet::<ICaseName>::with_capacity(raw.labels.len());
+        let mut renamed_from_to = HashMap::<ICaseName, LabelName>::new();
         for lbl in &raw.labels {
             let PartialLabelSpec {
                 name,
                 rename_from,
                 options,
             } = lbl;
-            let name = name.to_string();
-            let iname = ICaseStr::new(name.clone());
+            let name = name.clone();
+            let iname = name.to_icase();
             if !defined_labels.insert(iname.clone()) {
                 return Err(ConfigError::RepeatedLabel(name));
             }
@@ -82,10 +84,10 @@ impl Config {
                 });
             }
             let mut rename_from2 = Vec::with_capacity(rename_from.len());
-            let mut renamed_here = HashSet::<ICaseStr>::new();
+            let mut renamed_here = HashSet::<ICaseName>::new();
             for n in rename_from {
-                let src = n.to_string();
-                let isrc = ICaseStr::new(src.clone());
+                let src = n.clone();
+                let isrc = src.to_icase();
                 if isrc == iname {
                     return Err(ConfigError::SelfRename(name));
                 }
@@ -175,9 +177,9 @@ pub(crate) struct RawProfile {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct PartialLabelSpec {
-    name: String,
+    name: LabelName,
     #[serde(default)]
-    rename_from: Vec<String>,
+    rename_from: Vec<LabelName>,
     #[serde(flatten)]
     options: PartialLabelOptions,
 }
@@ -216,7 +218,7 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: String::from("foo"),
+                    name: "foo".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
@@ -228,7 +230,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: String::from("bar"),
+                    name: "bar".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("blue".parse().unwrap()),
@@ -276,7 +278,7 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: String::from("gnusto"),
+                    name: "gnusto".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("yellow".parse().unwrap()),
@@ -288,7 +290,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: String::from("cleesh"),
+                    name: "cleesh".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("green".parse().unwrap()),
@@ -327,7 +329,7 @@ mod tests {
             profile.specs,
             [
                 LabelSpec {
-                    name: String::from("gnusto"),
+                    name: "gnusto".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("yellow".parse().unwrap()),
@@ -339,7 +341,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: String::from("cleesh"),
+                    name: "cleesh".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("green".parse().unwrap()),
@@ -393,7 +395,7 @@ mod tests {
         assert_eq!(
             default.specs,
             [LabelSpec {
-                name: String::from("foo"),
+                name: "foo".parse().unwrap(),
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
@@ -410,7 +412,7 @@ mod tests {
         assert_eq!(
             custom.specs,
             [LabelSpec {
-                name: String::from("Foo"),
+                name: "Foo".parse().unwrap(),
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("blue".parse().unwrap()),
@@ -517,8 +519,8 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: String::from("foo"),
-                    rename_from: vec![String::from("food"), String::from("drink")],
+                    name: "foo".parse().unwrap(),
+                    rename_from: vec!["food".parse().unwrap(), "drink".parse().unwrap()],
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
                         description: Some(String::from("Foo all the bars")),
@@ -529,7 +531,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: String::from("bar"),
+                    name: "bar".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("blue".parse().unwrap()),
@@ -588,7 +590,7 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: String::from("foo"),
+                    name: "foo".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::default(),
@@ -600,7 +602,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: String::from("bar"),
+                    name: "bar".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("blue".parse().unwrap()),
@@ -639,7 +641,7 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: String::from("foo"),
+                    name: "foo".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
@@ -651,7 +653,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: String::from("bar"),
+                    name: "bar".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("#cccccc".parse().unwrap()),
@@ -690,7 +692,7 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: String::from("foo"),
+                    name: "foo".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
@@ -702,7 +704,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: String::from("bar"),
+                    name: "bar".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("#cccccc".parse().unwrap()),
@@ -749,7 +751,7 @@ mod tests {
             defprofile.specs,
             [
                 LabelSpec {
-                    name: String::from("foo"),
+                    name: "foo".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Random(vec![
@@ -765,7 +767,7 @@ mod tests {
                     }
                 },
                 LabelSpec {
-                    name: String::from("bar"),
+                    name: "bar".parse().unwrap(),
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("orange".parse().unwrap()),
@@ -810,7 +812,7 @@ mod tests {
         assert_eq!(
             default.specs,
             [LabelSpec {
-                name: String::from("foo"),
+                name: "foo".parse().unwrap(),
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Random(vec![
@@ -831,7 +833,7 @@ mod tests {
         assert_eq!(
             custom.specs,
             [LabelSpec {
-                name: String::from("Foo"),
+                name: "Foo".parse().unwrap(),
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Random(vec![
@@ -867,7 +869,7 @@ mod tests {
         assert_eq!(
             defprofile.specs,
             [LabelSpec {
-                name: String::from("foo"),
+                name: "foo".parse().unwrap(),
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),

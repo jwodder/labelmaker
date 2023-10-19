@@ -223,7 +223,7 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
                 color,
                 description,
             } => {
-                let url = urljoin(&self.labels_url, [&name]);
+                let url = urljoin(&self.labels_url, [name.as_ref()]);
                 let payload = UpdateLabel {
                     new_name,
                     color,
@@ -245,7 +245,7 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
 #[skip_serializing_none]
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub(crate) struct UpdateLabel {
-    pub(crate) new_name: Option<String>,
+    pub(crate) new_name: Option<LabelName>,
     #[serde(serialize_with = "serialize_option_color")]
     pub(crate) color: Option<Color>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -341,7 +341,7 @@ mod tests {
     #[test]
     fn test_serialize_update_label_no_color() {
         let update = UpdateLabel {
-            new_name: Some(String::from("foo")),
+            new_name: Some("foo".parse().unwrap()),
             color: None,
             description: None,
         };
