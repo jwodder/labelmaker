@@ -14,6 +14,9 @@ use log::{Level, LevelFilter};
 use std::io;
 use std::path::PathBuf;
 
+/// Create & enforce sets of labels in GitHub repositories
+///
+/// See <https://github.com/jwodder/labelmaker> for more information
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 #[clap(version)]
 struct Arguments {
@@ -32,15 +35,31 @@ struct Arguments {
 
 #[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
 enum Command {
+    /// Apply a set of label specifications to GitHub repositories
     Apply {
+        /// Do not change anything in GitHub, but do emit log messages showing
+        /// what would be changed.
         #[arg(long)]
         dry_run: bool,
 
+        /// Specify which profile in the configuration file to use.  Defaults
+        /// to the value of `defaults.profile` in the configuration file, or to
+        /// `default`.
         #[arg(short = 'P', long, value_name = "NAME")]
         profile: Option<String>,
 
+        /// A configuration file describing what labels to create and/or update
+        /// in each repository
         config: PathBuf,
 
+        /// The GitHub repositories to operate on.
+        ///
+        /// Repositories can be specified in the form `OWNER/NAME` (or, when
+        /// `OWNER` is the authenticating user, just `NAME`) and/or as GitHub
+        /// repository URLs.
+        ///
+        /// If no repositories are specified, then the GitHub repository for
+        /// the local Git repository is used.
         repository: Vec<String>,
     },
 }
