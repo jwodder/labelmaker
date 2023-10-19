@@ -13,34 +13,6 @@ pub(crate) struct Config {
     profiles: HashMap<String, RawProfile>,
 }
 
-#[derive(Debug, Error)]
-pub(crate) enum ConfigError {
-    #[error("failed to read file {}", .path.display())]
-    Read {
-        path: PathBuf,
-        source: std::io::Error,
-    },
-    #[error(transparent)]
-    Parse(#[from] toml::de::Error),
-    #[error("profile not found: {0:?}")]
-    NoSuchProfile(String),
-    #[error("multiple definitions for label {0:?} in profile")]
-    RepeatedLabel(LabelName),
-    #[error("label {0:?} cannot be renamed from itself")]
-    SelfRename(LabelName),
-    #[error("label {label:?} defined but also would be renamed to {renamer:?}")]
-    LabelRenamed {
-        label: LabelName,
-        renamer: LabelName,
-    },
-    #[error("{renamed:?} would be renamed to both {label1:?} and {label2:?}")]
-    RenameConflict {
-        renamed: LabelName,
-        label1: LabelName,
-        label2: LabelName,
-    },
-}
-
 impl Config {
     pub(crate) fn load<P: AsRef<Path>>(path: P) -> Result<Config, ConfigError> {
         match std::fs::read_to_string(&path) {
@@ -54,6 +26,21 @@ impl Config {
 
     pub(crate) fn from_toml_string(s: &str) -> Result<Config, ConfigError> {
         toml::from_str::<Config>(s).map_err(ConfigError::from)
+    }
+
+    pub(crate) fn from_labels(profile: String, labels: Vec<Label>) -> Config {
+        todo!()
+    }
+
+    pub(crate) fn dump(&self, outfile: patharg::OutputArg) -> Result<(), ConfigError> {
+        let r = outfile.write(toml::to_string(self).map_err(ConfigError::Serialize)?);
+        match r {
+            Ok(()) => Ok(()),
+            Err(source) => Err(ConfigError::Write {
+                path: outfile,
+                source,
+            }),
+        }
     }
 
     pub(crate) fn get_profile(&self, name: &str) -> Result<Profile, ConfigError> {
@@ -182,6 +169,41 @@ pub(crate) struct PartialLabelSpec {
     rename_from: Vec<LabelName>,
     #[serde(flatten)]
     options: PartialLabelOptions,
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum ConfigError {
+    #[error("failed to read file {}", .path.display())]
+    Read {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error(transparent)]
+    Parse(#[from] toml::de::Error),
+    #[error("profile not found: {0:?}")]
+    NoSuchProfile(String),
+    #[error("multiple definitions for label {0:?} in profile")]
+    RepeatedLabel(LabelName),
+    #[error("label {0:?} cannot be renamed from itself")]
+    SelfRename(LabelName),
+    #[error("label {label:?} defined but also would be renamed to {renamer:?}")]
+    LabelRenamed {
+        label: LabelName,
+        renamer: LabelName,
+    },
+    #[error("label {renamed:?} would be renamed to both {label1:?} and {label2:?}")]
+    RenameConflict {
+        renamed: LabelName,
+        label1: LabelName,
+        label2: LabelName,
+    },
+    #[error("failed serializing configuration")]
+    Serialize(#[from] toml::ser::Error),
+    #[error("failed to write to {path:#}")]
+    Write {
+        path: patharg::OutputArg,
+        source: std::io::Error,
+    },
 }
 
 fn default_profile() -> String {
