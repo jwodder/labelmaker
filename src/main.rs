@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused)]
 mod client;
 mod config;
 mod labels;
@@ -10,6 +8,7 @@ use crate::config::Config;
 use crate::labels::LabelResolution;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use ghrepo::{GHRepo, LocalRepo};
 use log::{Level, LevelFilter};
@@ -55,7 +54,7 @@ enum Command {
 }
 
 impl Command {
-    async fn run(self, client: GitHub) {
+    async fn run(self, client: GitHub) -> anyhow::Result<()> {
         match self {
             Command::Apply {
                 dry_run,
@@ -63,24 +62,25 @@ impl Command {
                 config,
                 repository,
             } => {
-                // TODO: Replace unwrap()'s with `?`
-                let cfg = Config::load(config).unwrap();
+                let cfg = Config::load(config).context("error loading config file")?;
                 let profile = match profile {
-                    Some(p) => cfg.get_profile(&p).unwrap(),
-                    None => cfg.get_default_profile().unwrap(),
+                    Some(p) => cfg.get_profile(&p)?,
+                    None => cfg.get_default_profile()?,
                 };
-                let me = client.whoami().await.unwrap();
+                let me = client
+                    .whoami()
+                    .await
+                    .context("unable to determine authenticating user's login name")?;
                 let repos = if repository.is_empty() {
-                    let r = LocalRepo::for_cwd()
-                        .unwrap()
-                        .github_remote("origin")
-                        .unwrap();
+                    let r = LocalRepo::for_cwd()?.github_remote("origin").context(
+                        "unable to determine remote GitHub repository for local Git repository",
+                    )?;
                     vec![r]
                 } else {
                     repository
                         .into_iter()
-                        .map(|s| GHRepo::from_str_with_owner(&s, &me).unwrap())
-                        .collect::<Vec<_>>()
+                        .map(|s| GHRepo::from_str_with_owner(&s, &me))
+                        .collect::<Result<Vec<_>, _>>()?
                 };
                 let mut rng = rand::thread_rng();
                 for r in repos {
@@ -101,23 +101,23 @@ impl Command {
                         maker.execute(op).await.unwrap();
                     }
                 }
+                Ok(())
             }
         }
     }
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let Arguments {
         api_url,
         log_level,
         command,
     } = Arguments::parse();
     init_logging(log_level);
-    // TODO: Replace unwrap() with `?`:
-    let token = get_github_token(&api_url).unwrap();
-    let client = GitHub::new(api_url, &token).unwrap();
-    command.run(client).await;
+    let token = get_github_token(&api_url).context("unable to fetch GitHub access token")?;
+    let client = GitHub::new(api_url, &token)?;
+    command.run(client).await
 }
 
 fn init_logging(log_level: LevelFilter) {

@@ -1,10 +1,10 @@
-use crate::config::{PartialLabelOptions, PartialLabelSpec};
+use crate::config::PartialLabelOptions;
 use crate::util::{color2rgbhex, serialize_color, ICaseStr};
 use csscolorparser::Color;
 use ghrepo::GHRepo;
 use itertools::Itertools;
 use rand::{seq::SliceRandom, Rng};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use thiserror::Error; // format()

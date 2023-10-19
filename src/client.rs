@@ -9,11 +9,10 @@ use reqwest::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{to_string_pretty, value::Value};
 use serde_with::skip_serializing_none;
-use std::collections::HashMap;
 use std::env::{var, VarError};
 use std::process::{Command, Stdio};
 use thiserror::Error;
-use url::{ParseError, Url};
+use url::Url;
 
 static USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
@@ -267,8 +266,6 @@ pub(crate) enum BuildClientError {
 
 #[derive(Debug, Error)]
 pub(crate) enum RequestError {
-    #[error("failed to construct API URL with path {path:?}")]
-    Url { path: String, source: ParseError },
     #[error("failed to deserialize response body from {method} request to {url}")]
     Deserialize {
         method: Method,
