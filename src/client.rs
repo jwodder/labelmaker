@@ -171,7 +171,10 @@ impl GitHub {
         dry_run: bool,
     ) -> Result<LabelMaker<'_, R>, RequestError> {
         log::debug!("Fetching current labels for {repo} ...");
-        let labels_url = urljoin(&self.api_url, [repo.owner(), repo.name(), "labels"]);
+        let labels_url = urljoin(
+            &self.api_url,
+            ["repos", repo.owner(), repo.name(), "labels"],
+        );
         let mut labels = LabelSet::new(rng);
         labels.extend(self.paginate::<Label>(labels_url.clone()).await?);
         Ok(LabelMaker {
