@@ -11,7 +11,7 @@ pub(crate) struct Config {
     #[serde(default)]
     defaults: TopOptions,
     #[serde(default)]
-    profile: HashMap<String, RawProfile>,
+    profiles: HashMap<String, RawProfile>,
 }
 
 #[derive(Debug, Error)]
@@ -55,16 +55,16 @@ impl Config {
     }
 
     pub(crate) fn get_profile(&self, name: &str) -> Result<Profile, ConfigError> {
-        let Some(raw) = self.profile.get(name) else {
+        let Some(raw) = self.profiles.get(name) else {
             return Err(ConfigError::NoSuchProfile(name.into()));
         };
         let settings = LabelOptions::default()
             .with_overrides(&self.defaults.options)
             .with_overrides(&raw.defaults);
-        let mut specs = Vec::with_capacity(raw.label.len());
-        let mut defined_labels = HashSet::<ICaseStr>::with_capacity(raw.label.len());
+        let mut specs = Vec::with_capacity(raw.labels.len());
+        let mut defined_labels = HashSet::<ICaseStr>::with_capacity(raw.labels.len());
         let mut renamed_from_to = HashMap::<ICaseStr, String>::new();
-        for lbl in &raw.label {
+        for lbl in &raw.labels {
             let PartialLabelSpec {
                 name,
                 rename_from,
@@ -169,7 +169,7 @@ pub(crate) struct RawProfile {
     #[serde(default)]
     defaults: PartialLabelOptions,
     #[serde(default)]
-    label: Vec<PartialLabelSpec>,
+    labels: Vec<PartialLabelSpec>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -195,12 +195,12 @@ mod tests {
     #[test]
     fn test_simple_config() {
         let s = indoc! {r#"
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "bar"
             color = "blue"
             description = "Bar all the foos"
@@ -249,22 +249,22 @@ mod tests {
             [defaults]
             profile = "mine"
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "bar"
             color = "blue"
             description = "Bar all the foos"
 
-            [[profile.mine.label]]
+            [[profiles.mine.labels]]
             name = "gnusto"
             color = "yellow"
             description = "Gnu all the stos"
 
-            [[profile.mine.label]]
+            [[profiles.mine.labels]]
             name = "cleesh"
             color = "green"
             description = "Clee all the shs"
@@ -306,12 +306,12 @@ mod tests {
     #[test]
     fn test_custom_profile_no_default() {
         let s = indoc! {r#"
-            [[profile.mine.label]]
+            [[profiles.mine.labels]]
             name = "gnusto"
             color = "yellow"
             description = "Gnu all the stos"
 
-            [[profile.mine.label]]
+            [[profiles.mine.labels]]
             name = "cleesh"
             color = "green"
             description = "Clee all the shs"
@@ -357,12 +357,12 @@ mod tests {
     #[test]
     fn test_repeated_label() {
         let s = indoc! {r#"
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "Foo"
             color = "blue"
             description = "Bar all the foos"
@@ -377,12 +377,12 @@ mod tests {
     #[test]
     fn test_repeated_labels_in_different_profiles() {
         let s = indoc! {r#"
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
 
-            [[profile.custom.label]]
+            [[profiles.custom.labels]]
             name = "Foo"
             color = "blue"
             description = "Bar all the foos"
@@ -427,13 +427,13 @@ mod tests {
     #[test]
     fn test_label_previously_renamed() {
         let s = indoc! {r#"
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
             rename-from = ["bar"]
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "BAR"
             color = "blue"
             description = "Bar all the foos"
@@ -449,12 +449,12 @@ mod tests {
     #[test]
     fn test_label_later_renamed() {
         let s = indoc! {r#"
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "BAR"
             color = "blue"
             description = "Bar all the foos"
@@ -471,13 +471,13 @@ mod tests {
     #[test]
     fn test_label_renamed_twice() {
         let s = indoc! {r#"
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
             rename-from = ["quux"]
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "BAR"
             color = "blue"
             description = "Bar all the foos"
@@ -499,13 +499,13 @@ mod tests {
     #[test]
     fn test_duplicate_rename_from() {
         let s = indoc! {r#"
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
             rename-from = ["food", "drink", "Food"]
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "bar"
             color = "blue"
             description = "Bar all the foos"
@@ -547,13 +547,13 @@ mod tests {
     #[test]
     fn test_rename_from_self() {
         let s = indoc! {r#"
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
             rename-from = ["Foo"]
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "bar"
             color = "blue"
             description = "Bar all the foos"
@@ -568,13 +568,13 @@ mod tests {
     #[test]
     fn test_more_options() {
         let s = indoc! {r#"
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             description = "Foo all the bars"
             create = false
             on-rename-clash = "warn"
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "bar"
             color = "blue"
             update = false
@@ -622,12 +622,12 @@ mod tests {
             color = "cccccc"
             create = false
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "bar"
             description = "Bar all the foos"
             create = true
@@ -669,16 +669,16 @@ mod tests {
     #[test]
     fn test_profile_defaults() {
         let s = indoc! {r#"
-            [profile.default.defaults]
+            [profiles.default.defaults]
             color = "cccccc"
             create = false
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "bar"
             description = "Bar all the foos"
             create = true
@@ -726,17 +726,17 @@ mod tests {
             on-rename-clash = "error"
             enforce-case = false
 
-            [profile.default.defaults]
+            [profiles.default.defaults]
             enforce-case = true
             update = false
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             description = "Foo all the bars"
             create = false
             update = true
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "bar"
             color = "orange"
             on-rename-clash = "warn"
@@ -788,19 +788,19 @@ mod tests {
             update = false
             enforce-case = false
 
-            [profile.default.defaults]
+            [profiles.default.defaults]
             color = "white"
             update = true
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = ["blue", "yellow", "purple"]
             description = "Foo all the bars"
 
-            [profile.custom.defaults]
+            [profiles.custom.defaults]
             create = false
 
-            [[profile.custom.label]]
+            [[profiles.custom.labels]]
             name = "Foo"
             description = "Bar all the foos"
         "#};
@@ -852,11 +852,11 @@ mod tests {
     #[test]
     fn test_ignored_defaults() {
         let s = indoc! {r#"
-            [profile.default.defaults]
+            [profiles.default.defaults]
             profile = "custom"
             rename-from = ["bar"]
 
-            [[profile.default.label]]
+            [[profiles.default.labels]]
             name = "foo"
             color = "red"
             description = "Foo all the bars"
