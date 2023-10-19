@@ -171,19 +171,54 @@ impl GitHub {
         dry_run: bool,
     ) -> Result<LabelMaker<'_, R>, RequestError> {
         log::debug!("Fetching current labels for {repo} ...");
-        let labels_url = urljoin(
-            &self.api_url,
-            ["repos", repo.owner(), repo.name(), "labels"],
-        );
+        let repo = Repository::new(self, repo);
         let mut labels = LabelSet::new(rng);
-        labels.extend(self.paginate::<Label>(labels_url.clone()).await?);
+        labels.extend(repo.get_labels().await?);
         Ok(LabelMaker {
-            client: self,
             repo,
             labels,
-            labels_url,
             dry_run,
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct Repository<'a> {
+    client: &'a GitHub,
+    repo: GHRepo,
+    labels_url: Url,
+}
+
+impl<'a> Repository<'a> {
+    pub(crate) fn new(client: &'a GitHub, repo: GHRepo) -> Repository<'a> {
+        let labels_url = urljoin(
+            &client.api_url,
+            ["repos", repo.owner(), repo.name(), "labels"],
+        );
+        Repository {
+            client,
+            repo,
+            labels_url,
+        }
+    }
+
+    pub(crate) async fn get_labels(&self) -> Result<Vec<Label>, RequestError> {
+        self.client.paginate::<Label>(self.labels_url.clone()).await
+    }
+
+    pub(crate) async fn create_label(&self, label: Label) -> Result<Label, RequestError> {
+        self.client
+            .post::<Label, Label>(self.labels_url.clone(), &label)
+            .await
+    }
+
+    pub(crate) async fn update_label(
+        &self,
+        label: LabelName,
+        payload: UpdateLabel,
+    ) -> Result<Label, RequestError> {
+        let url = urljoin(&self.labels_url, [label.as_ref()]);
+        self.client.patch::<UpdateLabel, Label>(url, &payload).await
     }
 }
 
@@ -220,10 +255,8 @@ pub(crate) enum RequestError {
 
 #[derive(Clone, Debug)]
 pub(crate) struct LabelMaker<'a, R: rand::Rng> {
-    client: &'a GitHub,
-    repo: GHRepo,
+    repo: Repository<'a>,
     labels: LabelSet<R>,
-    labels_url: Url,
     dry_run: bool,
 }
 
@@ -240,7 +273,7 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
         for r in res {
             match r {
                 LabelResolution::Operation(op) => {
-                    log::info!("{}", op.as_log_message(&self.repo, self.dry_run));
+                    log::info!("{}", op.as_log_message(&self.repo.repo, self.dry_run));
                     if !self.dry_run {
                         self.execute(op).await?;
                     }
@@ -258,10 +291,7 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
     pub(crate) async fn execute(&mut self, op: LabelOperation) -> Result<(), RequestError> {
         match op {
             LabelOperation::Create(label) => {
-                let created = self
-                    .client
-                    .post::<Label, Label>(self.labels_url.clone(), &label)
-                    .await?;
+                let created = self.repo.create_label(label).await?;
                 // TODO: Should this do anything if any of the new label's
                 // values are different from what was submitted?
                 self.labels.add(created);
@@ -272,16 +302,12 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
                 color,
                 description,
             } => {
-                let url = urljoin(&self.labels_url, [name.as_ref()]);
                 let payload = UpdateLabel {
                     new_name,
                     color,
                     description,
                 };
-                let updated = self
-                    .client
-                    .patch::<UpdateLabel, Label>(url, &payload)
-                    .await?;
+                let updated = self.repo.update_label(name, payload).await?;
                 // TODO: Should this do anything if any of the new values are
                 // different from what was submitted?
                 self.labels.add(updated);
@@ -293,7 +319,7 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
 
 #[skip_serializing_none]
 #[derive(Clone, Debug, PartialEq, Serialize)]
-struct UpdateLabel {
+pub(crate) struct UpdateLabel {
     new_name: Option<LabelName>,
     #[serde(serialize_with = "serialize_option_color")]
     color: Option<Color>,

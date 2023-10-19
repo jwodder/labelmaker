@@ -35,9 +35,9 @@ Usage
 
     labelmaker [<global options>] <subcommand> ...
 
-The `labelmaker` command has one subcommand (for now): `apply` (detailed
-below), which applies a set of label descriptions to one or more GitHub
-repositories.
+The `labelmaker` command has two subcommands, `apply` (for applying a set of
+label descriptions to one or more GitHub repositories) and `fetch` (for dumping
+a repository's labels as a configuration file), both detailed below.
 
 Global Options
 --------------
@@ -88,6 +88,37 @@ made.
 - `-P NAME`/`--profile NAME` — Specify which profile in the configuration file
   to use.  Defaults to the value of `defaults.profile` in the configuration
   file, or to `default`.
+
+
+`labelmaker fetch`
+------------------
+
+    labelmaker [<global options>] fetch [<options>] [<repository>]
+
+`labelmaker fetch` fetches the labels currently defined for the given GitHub
+repository and dumps them as a `labelmaker` configuration file, ready for input
+into `labelmaker apply`.
+
+The repository can be specified in the form `OWNER/NAME` (or, when `OWNER` is
+the authenticating user, just `NAME`) or as a GitHub repository URL.  If no
+repository is specified on the command line, then the current directory must
+belong to a Git repository whose `origin` remote points to a GitHub repository;
+`labelmaker` will operate on this remote repository.
+
+The generated configuration file lists only label names, colors, and
+descriptions, no defaults, aside from the file-wide `color` setting having its
+default value for use as a reference.
+
+### Options
+
+- `-o FILE`/`--outfile FILE` — Output the configuration to the given file.  By
+  default, output is written to standard output, which can also be selected by
+  supplying `-` as the outfile name.
+
+- `-P NAME`/`--profile NAME` — Set the name of the profile to place the labels
+  under in the generated configuration file.  The configuration file's default
+  profile will also be set to this value.  [default: `default`]
+
 
 Configuration File
 ------------------

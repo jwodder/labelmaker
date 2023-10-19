@@ -3,7 +3,7 @@ mod config;
 mod labels;
 mod util;
 
-use crate::client::GitHub;
+use crate::client::{GitHub, Repository};
 use crate::config::Config;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
@@ -62,6 +62,28 @@ enum Command {
         /// the local Git repository is used.
         repository: Vec<String>,
     },
+    /// Dump a repository's labels as a configuration file
+    Fetch {
+        /// File to output the configuration to.
+        ///
+        /// Defaults to standard output.
+        #[clap(short, long, default_value_t, hide_default_value = true)]
+        outfile: patharg::OutputArg,
+
+        /// Name of the profile to define in the generated configuration file
+        #[arg(short = 'P', long, value_name = "NAME", default_value = "default")]
+        profile: String,
+
+        /// The GitHub repository to operate on.
+        ///
+        /// The repository can be specified in the form `OWNER/NAME` (or, when
+        /// `OWNER` is the authenticating user, just `NAME`) or as a GitHub
+        /// repository URL.
+        ///
+        /// If not specified, then the GitHub repository for the local Git
+        /// repository is used.
+        repository: Option<String>,
+    },
 }
 
 impl Command {
@@ -99,9 +121,32 @@ impl Command {
                     let mut maker = client.get_label_maker(r, &mut rng, dry_run).await?;
                     maker.make(&profile.specs).await?;
                 }
-                Ok(())
+            }
+            Command::Fetch {
+                outfile,
+                profile,
+                repository,
+            } => {
+                let repo = match repository {
+                    Some(s) => {
+                        let me = client
+                            .whoami()
+                            .await
+                            .context("unable to determine authenticating user's login name")?;
+                        GHRepo::from_str_with_owner(&s, &me)?
+                    }
+                    None => LocalRepo::for_cwd()?.github_remote("origin").context(
+                        "unable to determine remote GitHub repository for local Git repository",
+                    )?,
+                };
+                log::debug!("Fetching current labels for {repo} ...");
+                let labels = Repository::new(&client, repo).get_labels().await?;
+                let cfg = Config::from_labels(profile, labels);
+                cfg.dump(outfile)
+                    .context("failed outputting configuration")?;
             }
         }
+        Ok(())
     }
 }
 
