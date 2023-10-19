@@ -8,9 +8,8 @@ authors = ["John Thorvald Wodder II <labelmaker@varonathe.org>"]
 repository = "https://github.com/jwodder/labelmaker"
 documentation = "https://github.com/jwodder/labelmaker"
 license = "MIT"
-keywords = []
-# See <https://crates.io/category_slugs> for a list of categories
-categories = []
+keywords = ["github", "github-labels"]
+categories = ["command-line-utilities"]
 exclude = ["/.*"]
 
 [dependencies]
