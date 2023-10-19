@@ -62,7 +62,7 @@ enum Command {
         /// the local Git repository is used.
         repository: Vec<String>,
     },
-    /// List a repository's labels as a configuration file
+    /// Dump a repository's labels as a configuration file
     Fetch {
         /// File to output the configuration to.
         ///
@@ -77,7 +77,7 @@ enum Command {
         /// The GitHub repository to operate on.
         ///
         /// The repository can be specified in the form `OWNER/NAME` (or, when
-        /// `OWNER` is the authenticating user, just `NAME`) and/or as a GitHub
+        /// `OWNER` is the authenticating user, just `NAME`) or as a GitHub
         /// repository URL.
         ///
         /// If not specified, then the GitHub repository for the local Git
