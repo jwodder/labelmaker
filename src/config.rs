@@ -28,13 +28,43 @@ impl Config {
         toml::from_str::<Config>(s).map_err(ConfigError::from)
     }
 
-    pub(crate) fn from_labels(profile: String, labels: Vec<Label>) -> Config {
-        todo!()
+    pub(crate) fn from_labels(profile: String, mut labels: Vec<Label>) -> Config {
+        labels.sort_unstable_by(|lb1, lb2| lb1.name.cmp(&lb2.name));
+        let labels = labels
+            .into_iter()
+            .map(|lbl| PartialLabelSpec {
+                name: lbl.name,
+                rename_from: Vec::new(),
+                options: PartialLabelOptions {
+                    color: Some(ColorSpec::Fixed(lbl.color)),
+                    description: lbl.description,
+                    ..PartialLabelOptions::default()
+                },
+            })
+            .collect();
+        let p = RawProfile {
+            defaults: PartialLabelOptions::default(),
+            labels,
+        };
+        let defaults = TopOptions {
+            profile: profile.clone(),
+            options: PartialLabelOptions {
+                color: Some(ColorSpec::default()),
+                ..PartialLabelOptions::default()
+            },
+        };
+        Config {
+            defaults,
+            profiles: HashMap::from([(profile, p)]),
+        }
+    }
+
+    pub(crate) fn to_toml(&self) -> Result<String, ConfigError> {
+        toml::to_string(self).map_err(Into::into)
     }
 
     pub(crate) fn dump(&self, outfile: patharg::OutputArg) -> Result<(), ConfigError> {
-        let r = outfile.write(toml::to_string(self).map_err(ConfigError::Serialize)?);
-        match r {
+        match outfile.write(self.to_toml()?) {
             Ok(()) => Ok(()),
             Err(source) => Err(ConfigError::Write {
                 path: outfile,
@@ -153,9 +183,15 @@ pub(crate) struct PartialLabelOptions {
     pub(crate) enforce_case: Option<bool>,
 }
 
+impl PartialLabelOptions {
+    fn is_all_none(&self) -> bool {
+        self == &PartialLabelOptions::default()
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct RawProfile {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "PartialLabelOptions::is_all_none")]
     defaults: PartialLabelOptions,
     #[serde(default)]
     labels: Vec<PartialLabelSpec>,
@@ -165,7 +201,7 @@ pub(crate) struct RawProfile {
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct PartialLabelSpec {
     name: LabelName,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     rename_from: Vec<LabelName>,
     #[serde(flatten)]
     options: PartialLabelOptions,
@@ -902,6 +938,62 @@ mod tests {
                     enforce_case: true,
                 }
             }]
+        );
+    }
+
+    #[test]
+    fn test_labels2toml() {
+        let labels = vec![
+            Label {
+                name: "Foo".parse().unwrap(),
+                color: "red".parse().unwrap(),
+                description: Some(String::from("Foo all the bars")),
+            },
+            Label {
+                name: "bar".parse().unwrap(),
+                color: "blue".parse().unwrap(),
+                description: Some(String::from("Bar all the foos")),
+            },
+            Label {
+                name: "no-desc".parse().unwrap(),
+                color: "green".parse().unwrap(),
+                description: None,
+            },
+            Label {
+                name: "empty-desc".parse().unwrap(),
+                color: "yellow".parse().unwrap(),
+                description: Some(String::new()),
+            },
+        ];
+        let cfg = Config::from_labels(String::from("test"), labels);
+        let toml = cfg.to_toml().unwrap();
+        eprintln!("{toml}");
+        assert_eq!(
+            toml,
+            indoc! {r##"
+            [defaults]
+            profile = "test"
+            color = ["#0052cc", "#006b75", "#0e8a16", "#1d76db", "#5319e7", "#b60205", "#bfd4f2", "#bfdadc", "#c2e0c6", "#c5def5", "#d4c5f9", "#d93f0b", "#e99695", "#f9d0c4", "#fbca04", "#fef2c0"]
+
+            [[profiles.test.labels]]
+            name = "Foo"
+            color = "#ff0000"
+            description = "Foo all the bars"
+
+            [[profiles.test.labels]]
+            name = "bar"
+            color = "#0000ff"
+            description = "Bar all the foos"
+
+            [[profiles.test.labels]]
+            name = "empty-desc"
+            color = "#ffff00"
+            description = ""
+
+            [[profiles.test.labels]]
+            name = "no-desc"
+            color = "#008000"
+        "##}
         );
     }
 }
