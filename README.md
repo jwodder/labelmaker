@@ -244,4 +244,4 @@ color = "ffffff"
 description = "This will not be worked on"
 ```
 
-[CSS color names][]: https://www.w3.org/TR/css-color-4/#named-colors
+[CSS color names]: https://www.w3.org/TR/css-color-4/#named-colors
