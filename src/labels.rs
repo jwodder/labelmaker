@@ -210,13 +210,13 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
                     if !std::mem::replace(&mut first, false) {
                         write!(f, ", ")?;
                     }
-                    write!(f, "color: {:?}", color2rgbhex(c))?;
+                    write!(f, "new color: {:?}", color2rgbhex(c))?;
                 }
                 if let Some(d) = description.as_ref() {
                     if !std::mem::replace(&mut first, false) {
                         write!(f, ", ")?;
                     }
-                    write!(f, "description: {d:?}")?;
+                    write!(f, "new description: {d:?}")?;
                 }
                 write!(f, ")")?;
             }
@@ -1428,5 +1428,117 @@ mod tests {
             let res = labels.resolve(&spec).unwrap();
             assert!(res.is_empty(), "{res:?}");
         }
+    }
+
+    #[test]
+    fn test_log_message_create() {
+        let op = LabelOperation::Create(Label {
+            name: "foo".parse().unwrap(),
+            color: "red".parse().unwrap(),
+            description: Some(String::from("Foo all the bars")),
+        });
+        let repo = GHRepo::new("octocat", "repo").unwrap();
+        assert_eq!(
+            op.as_log_message(&repo, false).to_string(),
+            r#"Creating label "foo" in octocat/repo (color: "ff0000", description: "Foo all the bars")"#
+        );
+        assert_eq!(
+            op.as_log_message(&repo, true).to_string(),
+            r#"Would create label "foo" in octocat/repo (color: "ff0000", description: "Foo all the bars")"#
+        );
+    }
+
+    #[test]
+    fn test_log_message_create_none_description() {
+        let op = LabelOperation::Create(Label {
+            name: "foo".parse().unwrap(),
+            color: "red".parse().unwrap(),
+            description: None,
+        });
+        let repo = GHRepo::new("octocat", "repo").unwrap();
+        assert_eq!(
+            op.as_log_message(&repo, false).to_string(),
+            r#"Creating label "foo" in octocat/repo (color: "ff0000", description: "")"#
+        );
+        assert_eq!(
+            op.as_log_message(&repo, true).to_string(),
+            r#"Would create label "foo" in octocat/repo (color: "ff0000", description: "")"#
+        );
+    }
+
+    #[test]
+    fn test_log_message_update_name() {
+        let op = LabelOperation::Update {
+            name: "foo".parse().unwrap(),
+            new_name: Some("bar".parse().unwrap()),
+            color: None,
+            description: None,
+        };
+        let repo = GHRepo::new("octocat", "repo").unwrap();
+        assert_eq!(
+            op.as_log_message(&repo, false).to_string(),
+            r#"Updating label "foo" in octocat/repo (new name: "bar")"#
+        );
+        assert_eq!(
+            op.as_log_message(&repo, true).to_string(),
+            r#"Would update label "foo" in octocat/repo (new name: "bar")"#
+        );
+    }
+
+    #[test]
+    fn test_log_message_update_color() {
+        let op = LabelOperation::Update {
+            name: "foo".parse().unwrap(),
+            new_name: None,
+            color: Some("blue".parse().unwrap()),
+            description: None,
+        };
+        let repo = GHRepo::new("octocat", "repo").unwrap();
+        assert_eq!(
+            op.as_log_message(&repo, false).to_string(),
+            r#"Updating label "foo" in octocat/repo (new color: "0000ff")"#
+        );
+        assert_eq!(
+            op.as_log_message(&repo, true).to_string(),
+            r#"Would update label "foo" in octocat/repo (new color: "0000ff")"#
+        );
+    }
+
+    #[test]
+    fn test_log_message_update_description() {
+        let op = LabelOperation::Update {
+            name: "foo".parse().unwrap(),
+            new_name: None,
+            color: None,
+            description: Some(String::from("What is a foo without its bar?")),
+        };
+        let repo = GHRepo::new("octocat", "repo").unwrap();
+        assert_eq!(
+            op.as_log_message(&repo, false).to_string(),
+            r#"Updating label "foo" in octocat/repo (new description: "What is a foo without its bar?")"#
+        );
+        assert_eq!(
+            op.as_log_message(&repo, true).to_string(),
+            r#"Would update label "foo" in octocat/repo (new description: "What is a foo without its bar?")"#
+        );
+    }
+
+    #[test]
+    fn test_log_message_update_all() {
+        let op = LabelOperation::Update {
+            name: "foo".parse().unwrap(),
+            new_name: Some("bar".parse().unwrap()),
+            color: Some("blue".parse().unwrap()),
+            description: Some(String::from("What is a foo without its bar?")),
+        };
+        let repo = GHRepo::new("octocat", "repo").unwrap();
+        assert_eq!(
+            op.as_log_message(&repo, false).to_string(),
+            r#"Updating label "foo" in octocat/repo (new name: "bar", new color: "0000ff", new description: "What is a foo without its bar?")"#
+        );
+        assert_eq!(
+            op.as_log_message(&repo, true).to_string(),
+            r#"Would update label "foo" in octocat/repo (new name: "bar", new color: "0000ff", new description: "What is a foo without its bar?")"#
+        );
     }
 }

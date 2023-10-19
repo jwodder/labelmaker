@@ -323,7 +323,6 @@ pub(crate) struct UpdateLabel {
     new_name: Option<LabelName>,
     #[serde(serialize_with = "serialize_option_color")]
     color: Option<Color>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
 }
 
