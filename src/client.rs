@@ -63,7 +63,7 @@ impl GitHub {
         url: Url,
         payload: Option<&T>,
     ) -> Result<Response, RequestError> {
-        log::debug!("{} {}", method, url);
+        log::trace!("{} {}", method, url);
         let mut req = self.client.request(method.clone(), url.clone());
         if let Some(p) = payload {
             req = req.json(p);
@@ -171,7 +171,7 @@ impl GitHub {
         repo: GHRepo,
         dry_run: bool,
     ) -> Result<LabelMaker<'_>, RequestError> {
-        log::info!("Fetching current labels for {repo} ...");
+        log::debug!("Fetching current labels for {repo} ...");
         let labels_url = urljoin(&self.api_url, [repo.owner(), repo.name(), "labels"]);
         let labels = LabelSet::from_iter(self.paginate::<Label>(labels_url.clone()).await?);
         Ok(LabelMaker {
