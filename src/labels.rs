@@ -334,39 +334,45 @@ impl<R: Rng> LabelSet<R> {
             .iter()
             .filter_map(|name| self.data.get(&name.to_icase()))
             .collect::<Vec<_>>();
-        if rename_candidates.len() > 1 {
-            return Err(LabelError::MultipleRenameCandidates {
-                label: spec.name.clone(),
-                candidates: rename_candidates
-                    .into_iter()
-                    .map(|c| c.name.clone())
-                    .collect(),
-            });
-        }
         let updating = if let Some(extant) = self.data.get(&iname) {
             let mut builder = UpdateBuilder::new(&extant.name);
             if spec.options.enforce_case && spec.name != extant.name {
                 builder.new_name(&spec.name);
             }
-            if let Some(c) = rename_candidates.first() {
+            if !rename_candidates.is_empty() {
                 match spec.options.on_rename_clash {
                     OnRenameClash::Ignore => (),
                     OnRenameClash::Warn => {
                         res.push(LabelResolution::Warning(LabelWarning::RenameClash {
                             label: extant.name.clone(),
-                            candidate: c.name.clone(),
+                            candidates: rename_candidates
+                                .into_iter()
+                                .map(|c| c.name.clone())
+                                .collect(),
                         }))
                     }
                     OnRenameClash::Error => {
                         return Err(LabelError::RenameClash {
                             label: extant.name.clone(),
-                            candidate: c.name.clone(),
+                            candidates: rename_candidates
+                                .into_iter()
+                                .map(|c| c.name.clone())
+                                .collect(),
                         })
                     }
                 }
             }
             Some((extant, builder))
         } else if !rename_candidates.is_empty() {
+            if rename_candidates.len() > 1 {
+                return Err(LabelError::MultipleRenameCandidates {
+                    label: spec.name.clone(),
+                    candidates: rename_candidates
+                        .into_iter()
+                        .map(|c| c.name.clone())
+                        .collect(),
+                });
+            }
             let candidate = rename_candidates
                 .pop()
                 .expect("nonempty Vec should pop Some");
@@ -422,16 +428,17 @@ pub(crate) enum LabelResolution {
 pub(crate) enum LabelWarning {
     RenameClash {
         label: LabelName,
-        candidate: LabelName,
+        candidates: Vec<LabelName>,
     },
 }
 
 impl fmt::Display for LabelWarning {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            LabelWarning::RenameClash { label, candidate } => write!(
+            LabelWarning::RenameClash { label, candidates } => write!(
                 f,
-                "label {label:?} exists and so does rename-from candidate {candidate:?}"
+                "label {label:?} exists and so {}",
+                display_rename_clash_candidates(candidates)
             ),
         }
     }
@@ -444,11 +451,22 @@ pub(crate) enum LabelError {
         label: LabelName,
         candidates: Vec<LabelName>,
     },
-    #[error("label {label:?} exists and so does rename-from candidate {candidate:?}")]
+    #[error("label {label:?} exists and so {}", display_rename_clash_candidates(.candidates))]
     RenameClash {
         label: LabelName,
-        candidate: LabelName,
+        candidates: Vec<LabelName>,
     },
+}
+
+fn display_rename_clash_candidates(candidates: &[LabelName]) -> String {
+    if candidates.len() == 1 {
+        format!("does rename-from candidate {:?}", candidates[0])
+    } else {
+        format!(
+            "do rename-from candidates {:?}",
+            candidates.iter().format(", ")
+        )
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1095,7 +1113,7 @@ mod tests {
             let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: "quux".parse().unwrap(),
-                rename_from: vec!["Foo".parse().unwrap(), "BAR".parse().unwrap()],
+                rename_from: vec!["Foo".parse().unwrap(), "bar".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("yellow".parse().unwrap()),
                     description: None,
@@ -1105,42 +1123,11 @@ mod tests {
             let r = labels.resolve(&spec);
             assert_matches!(r, Err(LabelError::MultipleRenameCandidates {ref label, ref candidates}) => {
                 assert_eq!(label, "quux");
-                assert_eq!(candidates, &vec!["foo".parse::<LabelName>().unwrap(), "BAR".parse().unwrap()]);
+                assert_eq!(candidates, &["foo".parse::<LabelName>().unwrap(), "BAR".parse().unwrap()]);
             });
             assert_eq!(
                 r.unwrap_err().to_string(),
                 r#"label "quux" has multiple rename-from candidates: "foo", "BAR""#
-            );
-        }
-
-        #[rstest]
-        #[case(OnRenameClash::Ignore)]
-        #[case(OnRenameClash::Warn)]
-        #[case(OnRenameClash::Error)]
-        fn label_exists_and_multiple_rename_candidates(#[case] on_rename_clash: OnRenameClash) {
-            let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: vec![
-                    "no-desc".parse().unwrap(),
-                    "nexists".parse().unwrap(),
-                    "BAR".parse().unwrap(),
-                ],
-                options: LabelOptions {
-                    color: ColorSpec::Fixed("yellow".parse().unwrap()),
-                    description: None,
-                    on_rename_clash,
-                    ..LabelOptions::default()
-                },
-            };
-            let r = labels.resolve(&spec);
-            assert_matches!(r, Err(LabelError::MultipleRenameCandidates {ref label, ref candidates}) => {
-                assert_eq!(label, "foo");
-                assert_eq!(candidates, &vec!["no-desc".parse::<LabelName>().unwrap(), "BAR".parse().unwrap()]);
-            });
-            assert_eq!(
-                r.unwrap_err().to_string(),
-                r#"label "foo" has multiple rename-from candidates: "no-desc", "BAR""#
             );
         }
 
@@ -1179,7 +1166,7 @@ mod tests {
                 res,
                 [LabelResolution::Warning(LabelWarning::RenameClash {
                     label: "foo".parse().unwrap(),
-                    candidate: "BAR".parse().unwrap(),
+                    candidates: vec!["BAR".parse().unwrap()],
                 })]
             );
             let LabelResolution::Warning(ref warn) = res[0] else {
@@ -1205,9 +1192,9 @@ mod tests {
                 },
             };
             let r = labels.resolve(&spec);
-            assert_matches!(r, Err(LabelError::RenameClash {ref label, ref candidate}) => {
+            assert_matches!(r, Err(LabelError::RenameClash {ref label, ref candidates}) => {
                 assert_eq!(label, "foo");
-                assert_eq!(candidate, "BAR");
+                assert_eq!(candidates, &["BAR".parse::<LabelName>().unwrap()]);
             });
             assert_eq!(
                 r.unwrap_err().to_string(),
@@ -1261,7 +1248,7 @@ mod tests {
                 [
                     LabelResolution::Warning(LabelWarning::RenameClash {
                         label: "foo".parse().unwrap(),
-                        candidate: "BAR".parse().unwrap(),
+                        candidates: vec!["BAR".parse().unwrap()],
                     }),
                     LabelResolution::Operation(LabelOperation::Update {
                         name: "foo".parse().unwrap(),
@@ -1295,13 +1282,99 @@ mod tests {
                 },
             };
             let r = labels.resolve(&spec);
-            assert_matches!(r, Err(LabelError::RenameClash {ref label, ref candidate}) => {
+            assert_matches!(r, Err(LabelError::RenameClash {ref label, ref candidates}) => {
                 assert_eq!(label, "foo");
-                assert_eq!(candidate, "BAR");
+                assert_eq!(candidates, &["BAR".parse::<LabelName>().unwrap()]);
             });
             assert_eq!(
                 r.unwrap_err().to_string(),
                 r#"label "foo" exists and so does rename-from candidate "BAR""#
+            );
+        }
+
+        #[rstest]
+        fn multiple_rename_clash_ignore() {
+            let mut labels = sample_label_set();
+            let spec = LabelSpec {
+                name: "foo".parse().unwrap(),
+                rename_from: vec![
+                    "no-desc".parse().unwrap(),
+                    "nexists".parse().unwrap(),
+                    "bar".parse().unwrap(),
+                ],
+                options: LabelOptions {
+                    color: ColorSpec::Fixed("red".parse().unwrap()),
+                    description: Some(String::from("Foo all the bars")),
+                    on_rename_clash: OnRenameClash::Ignore,
+                    ..LabelOptions::default()
+                },
+            };
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty(), "{res:?}");
+        }
+
+        #[test]
+        fn multiple_rename_clash_warn() {
+            let mut labels = sample_label_set();
+            let spec = LabelSpec {
+                name: "foo".parse().unwrap(),
+                rename_from: vec![
+                    "no-desc".parse().unwrap(),
+                    "nexists".parse().unwrap(),
+                    "bar".parse().unwrap(),
+                ],
+                options: LabelOptions {
+                    color: ColorSpec::Fixed("red".parse().unwrap()),
+                    description: Some(String::from("Foo all the bars")),
+                    on_rename_clash: OnRenameClash::Warn,
+                    ..LabelOptions::default()
+                },
+            };
+            let res = labels.resolve(&spec).unwrap();
+            assert_eq!(
+                res,
+                [LabelResolution::Warning(LabelWarning::RenameClash {
+                    label: "foo".parse().unwrap(),
+                    candidates: vec![
+                        "no-desc".parse::<LabelName>().unwrap(),
+                        "BAR".parse().unwrap()
+                    ],
+                })]
+            );
+            let LabelResolution::Warning(ref warn) = res[0] else {
+                unreachable!();
+            };
+            assert_eq!(
+                warn.to_string(),
+                r#"label "foo" exists and so do rename-from candidates "no-desc", "BAR""#
+            );
+        }
+
+        #[test]
+        fn multiple_rename_clash_error() {
+            let mut labels = sample_label_set();
+            let spec = LabelSpec {
+                name: "foo".parse().unwrap(),
+                rename_from: vec![
+                    "no-desc".parse().unwrap(),
+                    "nexists".parse().unwrap(),
+                    "bar".parse().unwrap(),
+                ],
+                options: LabelOptions {
+                    color: ColorSpec::Fixed("red".parse().unwrap()),
+                    description: Some(String::from("Foo all the bars")),
+                    on_rename_clash: OnRenameClash::Error,
+                    ..LabelOptions::default()
+                },
+            };
+            let r = labels.resolve(&spec);
+            assert_matches!(r, Err(LabelError::RenameClash {ref label, ref candidates}) => {
+                assert_eq!(label, "foo");
+                assert_eq!(candidates, &["no-desc".parse::<LabelName>().unwrap(), "BAR".parse().unwrap()]);
+            });
+            assert_eq!(
+                r.unwrap_err().to_string(),
+                r#"label "foo" exists and so do rename-from candidates "no-desc", "BAR""#
             );
         }
 

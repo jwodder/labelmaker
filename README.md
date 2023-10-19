@@ -156,7 +156,7 @@ fields:
               labels in `rename-from`, a warning is emitted by default; see the
               `on-rename-clash` option below.
 
-            - It is an error if a label inclues its own name in `rename-from`.
+            - It is an error if a label includes its own name in `rename-from`.
 
             - It is an error if a label specified by a profile is also in the
               `rename-from` list of another label in the same profile.
