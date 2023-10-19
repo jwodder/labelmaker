@@ -8,7 +8,7 @@ use reqwest::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{to_string_pretty, value::Value};
-use serde_with::skip_serializing_none;
+use serde_with::{serde_as, skip_serializing_none};
 use std::borrow::Borrow;
 use thiserror::Error;
 use url::Url;
@@ -317,11 +317,12 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
     }
 }
 
+#[serde_as]
 #[skip_serializing_none]
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub(crate) struct UpdateLabel {
     new_name: Option<LabelName>,
-    #[serde(serialize_with = "serialize_option_color")]
+    #[serde_as(as = "Option<AsHashlessRgb>")]
     color: Option<Color>,
     description: Option<String>,
 }

@@ -1,5 +1,4 @@
 use crate::config::PartialLabelOptions;
-use crate::util::{color2rgbhex, serialize_color};
 use csscolorparser::Color;
 use ghrepo::GHRepo;
 use itertools::Itertools;
@@ -9,6 +8,7 @@ use serde::{
     ser::Serializer,
     Deserialize, Serialize,
 };
+use serde_with::{serde_as, DeserializeAs, SerializeAs};
 use smartstring::alias::CompactString;
 use std::collections::HashMap;
 use std::fmt;
@@ -130,10 +130,11 @@ impl<'de> Deserialize<'de> for LabelName {
     }
 }
 
+#[serde_as]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Label {
     pub(crate) name: LabelName,
-    #[serde(serialize_with = "serialize_color")]
+    #[serde_as(as = "AsHashlessRgb")]
     pub(crate) color: Color,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) description: Option<String>,
@@ -185,7 +186,7 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
                     "label {:?} in {} (color: {:?}, description: {:?})",
                     label.name,
                     self.repo,
-                    color2rgbhex(&label.color),
+                    hashless_rgb(&label.color),
                     label.description.as_deref().unwrap_or_default()
                 )?;
             }
@@ -210,7 +211,7 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
                     if !std::mem::replace(&mut first, false) {
                         write!(f, ", ")?;
                     }
-                    write!(f, "new color: {:?}", color2rgbhex(c))?;
+                    write!(f, "new color: {:?}", hashless_rgb(c))?;
                 }
                 if let Some(d) = description.as_ref() {
                     if !std::mem::replace(&mut first, false) {
@@ -522,6 +523,29 @@ impl<'a> UpdateBuilder<'a> {
     }
 }
 
+fn hashless_rgb(color: &Color) -> String {
+    let [r, g, b, _] = color.to_rgba8();
+    format!("{:02x}{:02x}{:02x}", r, g, b)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct AsHashlessRgb;
+
+impl SerializeAs<Color> for AsHashlessRgb {
+    fn serialize_as<S: Serializer>(color: &Color, serializer: S) -> Result<S::Ok, S::Error> {
+        hashless_rgb(color).serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, Color> for AsHashlessRgb {
+    fn deserialize_as<D>(deserializer: D) -> Result<Color, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Color::deserialize(deserializer)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -580,9 +604,10 @@ mod tests {
         assert!(serde_json::from_str::<NameContainer>(r#"{"name":" "}"#).is_err());
     }
 
+    #[serde_as]
     #[derive(Clone, Debug, PartialEq, Serialize)]
     struct ColorContainer {
-        #[serde(serialize_with = "serialize_color")]
+        #[serde_as(as = "AsHashlessRgb")]
         color: Color,
     }
 
@@ -593,7 +618,7 @@ mod tests {
     #[case("#D90DAD80", "d90dad")]
     #[case("CCC", "cccccc")]
     #[case("c0c0c0", "c0c0c0")]
-    fn test_color2rgbhex(#[case] color: Color, #[case] s: &str) {
+    fn test_as_hashless_rgb(#[case] color: Color, #[case] s: &str) {
         let obj = ColorContainer { color };
         let expected = format!(r#"{{"color":"{s}"}}"#);
         assert_eq!(serde_json::to_string(&obj).unwrap(), expected);
