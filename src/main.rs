@@ -82,9 +82,10 @@ impl Command {
                         .map(|s| GHRepo::from_str_with_owner(&s, &me).unwrap())
                         .collect::<Vec<_>>()
                 };
+                let mut rng = rand::thread_rng();
                 for r in repos {
                     log::info!("Applying profile {:?} to repository {}", profile.name, r);
-                    let mut maker = client.get_label_maker(r, dry_run).await.unwrap();
+                    let mut maker = client.get_label_maker(r, &mut rng, dry_run).await.unwrap();
                     let mut ops = Vec::with_capacity(profile.specs.len());
                     for spec in &profile.specs {
                         for res in maker.resolve(spec).unwrap() {

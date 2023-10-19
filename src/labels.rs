@@ -3,6 +3,7 @@ use crate::util::{color2rgbhex, serialize_color, ICaseStr};
 use csscolorparser::Color;
 use ghrepo::GHRepo;
 use itertools::Itertools;
+use rand::{seq::SliceRandom, Rng};
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
@@ -192,38 +193,123 @@ pub(crate) enum ColorSpec {
     Random(Vec<Color>),
 }
 
+impl ColorSpec {
+    pub(crate) fn pick<R: Rng>(&self, rng: &mut R) -> Color {
+        match self {
+            ColorSpec::Fixed(c) => c.clone(),
+            ColorSpec::Random(cs) => cs.choose(rng).cloned().unwrap_or_default(),
+        }
+    }
+}
+
 impl Default for ColorSpec {
     fn default() -> ColorSpec {
         ColorSpec::Random(DEFAULT_COLORS.iter().map(|&rgb| Color::from(rgb)).collect())
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct LabelSet(HashMap<ICaseStr, Label>);
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LabelSet<R: Rng> {
+    data: HashMap<ICaseStr, Label>,
+    rng: R,
+}
 
-impl LabelSet {
-    pub(crate) fn new() -> LabelSet {
-        LabelSet(HashMap::new())
+impl<R: Rng> LabelSet<R> {
+    pub(crate) fn new(rng: R) -> LabelSet<R> {
+        LabelSet {
+            data: HashMap::new(),
+            rng,
+        }
     }
 
     pub(crate) fn add(&mut self, label: Label) {
-        self.0.insert(ICaseStr::new(label.name.clone()), label);
+        self.data.insert(ICaseStr::new(label.name.clone()), label);
     }
 
-    pub(crate) fn resolve(&self, spec: &LabelSpec) -> Result<Vec<LabelResolution>, LabelError> {
-        todo!()
+    pub(crate) fn resolve(&mut self, spec: &LabelSpec) -> Result<Vec<LabelResolution>, LabelError> {
+        let mut res = Vec::with_capacity(2);
+        let iname = ICaseStr::new(spec.name.clone());
+        let mut rename_candidates = spec
+            .rename_from
+            .iter()
+            .filter_map(|name| self.data.get(&ICaseStr::new(name.clone())))
+            .collect::<Vec<_>>();
+        if rename_candidates.len() > 1 {
+            return Err(LabelError::MultipleRenameCandidates {
+                label: spec.name.clone(),
+                candidates: rename_candidates
+                    .into_iter()
+                    .map(|c| c.name.clone())
+                    .collect(),
+            });
+        }
+        let updating = if let Some(extant) = self.data.get(&iname) {
+            let mut builder = UpdateBuilder::new(&extant.name);
+            if spec.options.enforce_case && spec.name != extant.name {
+                builder.new_name(&spec.name);
+            }
+            if let Some(c) = rename_candidates.first() {
+                match spec.options.on_rename_clash {
+                    OnRenameClash::Ignore => (),
+                    OnRenameClash::Warn => {
+                        res.push(LabelResolution::Warning(LabelWarning::RenameClash {
+                            label: extant.name.clone(),
+                            candidate: c.name.clone(),
+                        }))
+                    }
+                    OnRenameClash::Error => {
+                        return Err(LabelError::RenameClash {
+                            label: extant.name.clone(),
+                            candidate: c.name.clone(),
+                        })
+                    }
+                }
+            }
+            Some((extant, builder))
+        } else if !rename_candidates.is_empty() {
+            let candidate = rename_candidates
+                .pop()
+                .expect("nonempty Vec should pop Some");
+            let mut builder = UpdateBuilder::new(&candidate.name);
+            builder.new_name(&spec.name);
+            Some((candidate, builder))
+        } else {
+            None
+        };
+        if let Some((extant, mut builder)) = updating {
+            if spec.options.update {
+                if let ColorSpec::Fixed(ref c) = spec.options.color {
+                    if c != &extant.color {
+                        builder.color(c);
+                    }
+                }
+                if let Some(ref desc) = spec.options.description {
+                    if desc != extant.description.as_deref().unwrap_or_default() {
+                        builder.description(desc);
+                    }
+                }
+            }
+            res.extend(builder.build());
+        } else if spec.options.create {
+            let label = Label {
+                name: spec.name.clone(),
+                color: spec.options.color.pick(&mut self.rng),
+                description: spec.options.description.clone(),
+            };
+            res.push(LabelResolution::Operation(LabelOperation::Create(label)));
+        }
+        Ok(res)
     }
 }
 
-impl FromIterator<Label> for LabelSet {
-    fn from_iter<I>(iter: I) -> LabelSet
+impl<R: Rng> Extend<Label> for LabelSet<R> {
+    fn extend<I>(&mut self, iter: I)
     where
         I: IntoIterator<Item = Label>,
     {
-        LabelSet(
+        self.data.extend(
             iter.into_iter()
-                .map(|lbl| (ICaseStr::new(lbl.name.clone()), lbl))
-                .collect(),
+                .map(|lbl| (ICaseStr::new(lbl.name.clone()), lbl)),
         )
     }
 }
@@ -261,6 +347,59 @@ pub(crate) enum LabelError {
     RenameClash { label: String, candidate: String },
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct UpdateBuilder<'a> {
+    name: &'a str,
+    new_name: Option<&'a str>,
+    color: Option<&'a Color>,
+    description: Option<&'a str>,
+}
+
+impl<'a> UpdateBuilder<'a> {
+    fn new(name: &'a str) -> UpdateBuilder {
+        UpdateBuilder {
+            name,
+            new_name: None,
+            color: None,
+            description: None,
+        }
+    }
+
+    fn new_name(&mut self, name: &'a str) {
+        self.new_name = Some(name);
+    }
+
+    fn color(&mut self, color: &'a Color) {
+        self.color = Some(color);
+    }
+
+    fn description(&mut self, desc: &'a str) {
+        self.description = Some(desc);
+    }
+
+    fn build(self) -> Option<LabelResolution> {
+        match self {
+            UpdateBuilder {
+                new_name: None,
+                color: None,
+                description: None,
+                ..
+            } => None,
+            UpdateBuilder {
+                name,
+                new_name,
+                color,
+                description,
+            } => Some(LabelResolution::Operation(LabelOperation::Update {
+                name: name.to_string(),
+                new_name: new_name.map(String::from),
+                color: color.cloned(),
+                description: description.map(String::from),
+            })),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,9 +435,12 @@ mod tests {
     mod resolve {
         use super::*;
         use assert_matches::assert_matches;
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha12Rng;
 
-        fn sample_label_set() -> LabelSet {
-            LabelSet::from_iter([
+        fn sample_label_set() -> LabelSet<ChaCha12Rng> {
+            let mut labels = LabelSet::new(ChaCha12Rng::seed_from_u64(0x0123456789ABCDEF));
+            labels.extend([
                 Label {
                     name: String::from("foo"),
                     color: "red".parse().unwrap(),
@@ -319,12 +461,13 @@ mod tests {
                     color: "blue".parse().unwrap(),
                     description: Some(String::new()),
                 },
-            ])
+            ]);
+            labels
         }
 
         #[test]
         fn create_new_label() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("quux"),
                 rename_from: Vec::new(),
@@ -348,7 +491,7 @@ mod tests {
 
         #[test]
         fn create_new_label_random_color() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("quux"),
                 rename_from: Vec::new(),
@@ -363,7 +506,30 @@ mod tests {
                 res,
                 [LabelResolution::Operation(LabelOperation::Create(Label {
                     name: String::from("quux"),
-                    color: "UPDATE WITH REPRODUCEABLE TEST OUTPUT".parse().unwrap(),
+                    color: "006B75".parse().unwrap(),
+                    description: None,
+                }))]
+            );
+        }
+
+        #[test]
+        fn create_new_label_empty_color_list() {
+            let mut labels = sample_label_set();
+            let spec = LabelSpec {
+                name: String::from("quux"),
+                rename_from: Vec::new(),
+                options: LabelOptions {
+                    color: ColorSpec::Random(Vec::new()),
+                    create: true,
+                    ..LabelOptions::default()
+                },
+            };
+            let res = labels.resolve(&spec).unwrap();
+            assert_eq!(
+                res,
+                [LabelResolution::Operation(LabelOperation::Create(Label {
+                    name: String::from("quux"),
+                    color: "000000".parse().unwrap(),
                     description: None,
                 }))]
             );
@@ -371,7 +537,7 @@ mod tests {
 
         #[test]
         fn no_create_new_label() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("quux"),
                 rename_from: Vec::new(),
@@ -388,7 +554,7 @@ mod tests {
 
         #[test]
         fn no_change_needed() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: Vec::new(),
@@ -404,7 +570,7 @@ mod tests {
 
         #[test]
         fn update_color() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: Vec::new(),
@@ -429,7 +595,7 @@ mod tests {
 
         #[test]
         fn update_description() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: Vec::new(),
@@ -453,8 +619,25 @@ mod tests {
         }
 
         #[test]
+        fn dont_update_to_null_description() {
+            let mut labels = sample_label_set();
+            let spec = LabelSpec {
+                name: String::from("foo"),
+                rename_from: Vec::new(),
+                options: LabelOptions {
+                    color: ColorSpec::Fixed("red".parse().unwrap()),
+                    description: None,
+                    update: true,
+                    ..LabelOptions::default()
+                },
+            };
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty());
+        }
+
+        #[test]
         fn update_color_and_description() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: Vec::new(),
@@ -479,7 +662,7 @@ mod tests {
 
         #[test]
         fn differs_update_false() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: Vec::new(),
@@ -498,7 +681,7 @@ mod tests {
         #[case(true)]
         #[case(false)]
         fn enforce_case_difference(#[case] update: bool) {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("Foo"),
                 rename_from: Vec::new(),
@@ -524,7 +707,7 @@ mod tests {
 
         #[test]
         fn enforce_case_difference_and_update_description() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("Foo"),
                 rename_from: Vec::new(),
@@ -550,7 +733,7 @@ mod tests {
 
         #[test]
         fn enforce_case_difference_and_no_update_description() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("Foo"),
                 rename_from: Vec::new(),
@@ -574,11 +757,37 @@ mod tests {
             );
         }
 
+        #[test]
+        fn no_enforce_case_difference_and_update_description() {
+            let mut labels = sample_label_set();
+            let spec = LabelSpec {
+                name: String::from("Foo"),
+                rename_from: Vec::new(),
+                options: LabelOptions {
+                    color: ColorSpec::Fixed("red".parse().unwrap()),
+                    description: Some(String::from("What is a foo without its bar?")),
+                    update: true,
+                    enforce_case: false,
+                    ..LabelOptions::default()
+                },
+            };
+            let res = labels.resolve(&spec).unwrap();
+            assert_eq!(
+                res,
+                [LabelResolution::Operation(LabelOperation::Update {
+                    name: String::from("foo"),
+                    new_name: None,
+                    color: None,
+                    description: Some(String::from("What is a foo without its bar?")),
+                })]
+            );
+        }
+
         #[rstest]
         #[case(true)]
         #[case(false)]
         fn update_does_not_imply_enforce_case_no_change(#[case] update: bool) {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("Foo"),
                 rename_from: Vec::new(),
@@ -596,7 +805,7 @@ mod tests {
 
         #[test]
         fn update_does_not_imply_enforce_case_still_change() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("Foo"),
                 rename_from: Vec::new(),
@@ -624,7 +833,7 @@ mod tests {
         #[case(true)]
         #[case(false)]
         fn rename(#[case] create: bool) {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("quux"),
                 rename_from: vec![String::from("foo"), String::from("nexists")],
@@ -649,7 +858,7 @@ mod tests {
 
         #[test]
         fn rename_and_update() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("quux"),
                 rename_from: vec![String::from("foo"), String::from("nexists")],
@@ -674,7 +883,7 @@ mod tests {
 
         #[test]
         fn rename_and_skip_update() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("quux"),
                 rename_from: vec![String::from("foo"), String::from("nexists")],
@@ -701,7 +910,7 @@ mod tests {
         #[case(true)]
         #[case(false)]
         fn rename_across_case(#[case] enforce_case: bool) {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("quux"),
                 rename_from: vec![String::from("FOO"), String::from("nexists")],
@@ -726,7 +935,7 @@ mod tests {
 
         #[test]
         fn multiple_rename_candidates() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("quux"),
                 rename_from: vec![String::from("Foo"), String::from("BAR")],
@@ -743,7 +952,7 @@ mod tests {
             });
             assert_eq!(
                 r.unwrap_err().to_string(),
-                r#"label "quux" has multiple rename-from matches: "foo", "BAR""#
+                r#"label "quux" has multiple rename-from candidates: "foo", "BAR""#
             );
         }
 
@@ -752,7 +961,7 @@ mod tests {
         #[case(OnRenameClash::Warn)]
         #[case(OnRenameClash::Error)]
         fn label_exists_and_multiple_rename_candidates(#[case] on_rename_clash: OnRenameClash) {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: vec![
@@ -780,7 +989,7 @@ mod tests {
 
         #[test]
         fn rename_clash_ignore() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: vec![String::from("bar"), String::from("nexists")],
@@ -797,7 +1006,7 @@ mod tests {
 
         #[test]
         fn rename_clash_warn() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: vec![String::from("bar"), String::from("nexists")],
@@ -827,7 +1036,7 @@ mod tests {
 
         #[test]
         fn rename_clash_error() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: vec![String::from("bar"), String::from("nexists")],
@@ -851,7 +1060,7 @@ mod tests {
 
         #[test]
         fn enforce_case_and_rename_clash_ignore() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("Foo"),
                 rename_from: vec![String::from("bar"), String::from("nexists")],
@@ -877,7 +1086,7 @@ mod tests {
 
         #[test]
         fn enforce_case_and_rename_clash_warn() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("Foo"),
                 rename_from: vec![String::from("bar"), String::from("nexists")],
@@ -892,20 +1101,20 @@ mod tests {
             let res = labels.resolve(&spec).unwrap();
             assert_eq!(
                 res,
-                vec![
+                [
+                    LabelResolution::Warning(LabelWarning::RenameClash {
+                        label: String::from("foo"),
+                        candidate: String::from("BAR"),
+                    }),
                     LabelResolution::Operation(LabelOperation::Update {
                         name: String::from("foo"),
                         new_name: Some(String::from("Foo")),
                         color: None,
                         description: None,
                     }),
-                    LabelResolution::Warning(LabelWarning::RenameClash {
-                        label: String::from("foo"),
-                        candidate: String::from("BAR"),
-                    }),
                 ]
             );
-            let LabelResolution::Warning(ref warn) = res[1] else {
+            let Some(LabelResolution::Warning(ref warn)) = res.first() else {
                 unreachable!();
             };
             assert_eq!(
@@ -916,7 +1125,7 @@ mod tests {
 
         #[test]
         fn enforce_case_and_rename_clash_error() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("Foo"),
                 rename_from: vec![String::from("bar"), String::from("nexists")],
@@ -941,7 +1150,7 @@ mod tests {
 
         #[test]
         fn dont_update_null_desc_to_empty() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("no-desc"),
                 rename_from: Vec::new(),
@@ -955,23 +1164,8 @@ mod tests {
         }
 
         #[test]
-        fn dont_update_empty_desc_to_null() {
-            let labels = sample_label_set();
-            let spec = LabelSpec {
-                name: String::from("empty-desc"),
-                rename_from: Vec::new(),
-                options: LabelOptions {
-                    description: None,
-                    ..LabelOptions::default()
-                },
-            };
-            let res = labels.resolve(&spec).unwrap();
-            assert!(res.is_empty());
-        }
-
-        #[test]
         fn dont_update_color_outside_of_random_list() {
-            let labels = sample_label_set();
+            let mut labels = sample_label_set();
             let spec = LabelSpec {
                 name: String::from("foo"),
                 rename_from: Vec::new(),
@@ -981,11 +1175,28 @@ mod tests {
                         "orange".parse().unwrap(),
                         "yellow".parse().unwrap(),
                     ]),
+                    update: true,
                     ..LabelOptions::default()
                 },
             };
             let res = labels.resolve(&spec).unwrap();
-            assert!(res.is_empty());
+            assert!(res.is_empty(), "{res:?}");
+        }
+
+        #[test]
+        fn dont_update_color_outside_of_empty_random_list() {
+            let mut labels = sample_label_set();
+            let spec = LabelSpec {
+                name: String::from("foo"),
+                rename_from: Vec::new(),
+                options: LabelOptions {
+                    color: ColorSpec::Random(Vec::new()),
+                    update: true,
+                    ..LabelOptions::default()
+                },
+            };
+            let res = labels.resolve(&spec).unwrap();
+            assert!(res.is_empty(), "{res:?}");
         }
     }
 }

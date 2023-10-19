@@ -26,6 +26,7 @@ log = "0.4.20"
 mime = "0.3.17"
 parse_link_header = { version = "0.3.3", features = ["url"] }
 patharg = "0.3.0"
+rand = "0.8.5"
 reqwest = { version = "0.11.22", features = ["json"] }
 serde = { version = "1.0.189", features = ["derive"] }
 serde_json = "1.0.107"
@@ -39,5 +40,6 @@ url = "2.4.1"
 [dev-dependencies]
 assert_matches = "1.5.0"
 indoc = "2.0.4"
+rand_chacha = "0.3.1"
 rstest = { version = "0.18.2", default-features = false }
 serde_json = "1.0.107"

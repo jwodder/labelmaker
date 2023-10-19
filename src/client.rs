@@ -166,14 +166,16 @@ impl GitHub {
             .login)
     }
 
-    pub(crate) async fn get_label_maker(
+    pub(crate) async fn get_label_maker<R: rand::Rng>(
         &self,
         repo: GHRepo,
+        rng: R,
         dry_run: bool,
-    ) -> Result<LabelMaker<'_>, RequestError> {
+    ) -> Result<LabelMaker<'_, R>, RequestError> {
         log::debug!("Fetching current labels for {repo} ...");
         let labels_url = urljoin(&self.api_url, [repo.owner(), repo.name(), "labels"]);
-        let labels = LabelSet::from_iter(self.paginate::<Label>(labels_url.clone()).await?);
+        let mut labels = LabelSet::new(rng);
+        labels.extend(self.paginate::<Label>(labels_url.clone()).await?);
         Ok(LabelMaker {
             client: self,
             repo,
@@ -190,16 +192,16 @@ struct User {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct LabelMaker<'a> {
+pub(crate) struct LabelMaker<'a, R: rand::Rng> {
     client: &'a GitHub,
     repo: GHRepo,
-    labels: LabelSet,
+    labels: LabelSet<R>,
     labels_url: Url,
     dry_run: bool,
 }
 
-impl<'a> LabelMaker<'a> {
-    pub(crate) fn resolve(&self, spec: &LabelSpec) -> Result<Vec<LabelResolution>, LabelError> {
+impl<'a, R: rand::Rng> LabelMaker<'a, R> {
+    pub(crate) fn resolve(&mut self, spec: &LabelSpec) -> Result<Vec<LabelResolution>, LabelError> {
         self.labels.resolve(spec)
     }
 
