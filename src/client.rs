@@ -10,7 +10,10 @@ use reqwest::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{to_string_pretty, value::Value};
 use serde_with::{serde_as, skip_serializing_none};
+use std::cell::Cell;
+use std::time::{Duration, Instant};
 use thiserror::Error;
+use tokio::time::sleep;
 use url::Url;
 
 static USER_AGENT: &str = concat!(
@@ -24,10 +27,15 @@ static USER_AGENT: &str = concat!(
 
 static GITHUB_API_URL: &str = "https://api.github.com";
 
+static MUTATING_METHODS: &[Method] = &[Method::POST, Method::PATCH, Method::PUT, Method::DELETE];
+
+const MUTATION_DELAY: Duration = Duration::from_secs(1);
+
 #[derive(Clone, Debug)]
 pub(crate) struct GitHub {
     client: Client,
     api_url: Url,
+    last_mutation: Cell<Option<Instant>>,
 }
 
 impl GitHub {
@@ -52,19 +60,36 @@ impl GitHub {
             .https_only(true)
             .build()
             .map_err(BuildClientError::Init)?;
-        Ok(GitHub { client, api_url })
+        Ok(GitHub {
+            client,
+            api_url,
+            last_mutation: Cell::new(None),
+        })
     }
 
     async fn raw_request<T: Serialize>(
         &self,
-        method: reqwest::Method,
+        method: Method,
         url: Url,
         payload: Option<&T>,
     ) -> Result<Response, RequestError> {
         log::trace!("{} {}", method, url);
+        if MUTATING_METHODS.contains(&method) {
+            if let Some(lastmut) = self.last_mutation.get() {
+                let delay = MUTATION_DELAY
+                    .saturating_sub(Instant::now().saturating_duration_since(lastmut));
+                if !delay.is_zero() {
+                    log::debug!("Sleeping for {delay:?} between mutating requests");
+                    sleep(delay).await;
+                }
+            }
+        }
         let mut req = self.client.request(method.clone(), url.clone());
         if let Some(p) = payload {
             req = req.json(p);
+        }
+        if MUTATING_METHODS.contains(&method) {
+            self.last_mutation.set(Some(Instant::now()));
         }
         match req.send().await {
             Ok(r) if r.status().is_client_error() || r.status().is_server_error() => {
@@ -95,7 +120,7 @@ impl GitHub {
 
     async fn request<T: Serialize, U: DeserializeOwned>(
         &self,
-        method: reqwest::Method,
+        method: Method,
         url: Url,
         payload: Option<&T>,
     ) -> Result<U, RequestError> {
