@@ -1,6 +1,7 @@
+mod util;
+use self::util::*;
 use crate::config::Profile;
 use crate::labels::*;
-use crate::util::*;
 use csscolorparser::Color;
 use ghrepo::GHRepo;
 use reqwest::{
@@ -8,9 +9,11 @@ use reqwest::{
     Client, ClientBuilder, Method, Response,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::{to_string_pretty, value::Value};
 use serde_with::{serde_as, skip_serializing_none};
+use std::cell::Cell;
+use std::time::{Duration, Instant};
 use thiserror::Error;
+use tokio::time::sleep;
 use url::Url;
 
 static USER_AGENT: &str = concat!(
@@ -24,10 +27,15 @@ static USER_AGENT: &str = concat!(
 
 static GITHUB_API_URL: &str = "https://api.github.com";
 
+static MUTATING_METHODS: &[Method] = &[Method::POST, Method::PATCH, Method::PUT, Method::DELETE];
+
+const MUTATION_DELAY: Duration = Duration::from_secs(1);
+
 #[derive(Clone, Debug)]
 pub(crate) struct GitHub {
     client: Client,
     api_url: Url,
+    last_mutation: Cell<Option<Instant>>,
 }
 
 impl GitHub {
@@ -52,50 +60,60 @@ impl GitHub {
             .https_only(true)
             .build()
             .map_err(BuildClientError::Init)?;
-        Ok(GitHub { client, api_url })
+        Ok(GitHub {
+            client,
+            api_url,
+            last_mutation: Cell::new(None),
+        })
     }
 
     async fn raw_request<T: Serialize>(
         &self,
-        method: reqwest::Method,
+        method: Method,
         url: Url,
         payload: Option<&T>,
     ) -> Result<Response, RequestError> {
         log::trace!("{} {}", method, url);
+        if MUTATING_METHODS.contains(&method) {
+            if let Some(lastmut) = self.last_mutation.get() {
+                let delay = MUTATION_DELAY
+                    .saturating_sub(Instant::now().saturating_duration_since(lastmut));
+                if !delay.is_zero() {
+                    log::trace!("Sleeping for {delay:?} between mutating requests");
+                    sleep(delay).await;
+                }
+            }
+        }
         let mut req = self.client.request(method.clone(), url.clone());
         if let Some(p) = payload {
             req = req.json(p);
         }
-        match req.send().await {
-            Ok(r) if r.status().is_client_error() || r.status().is_server_error() => {
-                let status = r.status();
-                // If the response body is JSON, pretty-print it.
-                let body = if is_json_response(&r) {
-                    r.json::<Value>().await.ok().map(|v| {
-                        to_string_pretty(&v).expect("Re-JSONifying a JSON response should not fail")
-                    })
-                } else {
-                    r.text().await.ok()
-                };
-                Err(RequestError::Status(Box::new(PrettyHttpError {
-                    method,
-                    url,
-                    status,
-                    body,
-                })))
+        let mut retrier = Retrier::new(method.clone(), url.clone());
+        loop {
+            if MUTATING_METHODS.contains(&method) {
+                self.last_mutation.set(Some(Instant::now()));
             }
-            Ok(r) => Ok(r),
-            Err(source) => Err(RequestError::Send {
-                method,
-                url,
-                source,
-            }),
+            let req = req
+                .try_clone()
+                .expect("non-streaming requests should be clonable");
+            let resp = req.send().await;
+            let desc = match resp {
+                Ok(ref r) => format!("Server returned {} response", r.status()),
+                Err(ref e) => format!("Request failed: {e}"),
+            };
+            match retrier.handle(resp).await? {
+                RetryDecision::Success(r) => return Ok(r),
+                RetryDecision::Retry(delay) => {
+                    log::warn!("{desc}; waiting {delay:?} and retrying");
+                    sleep(delay).await;
+                }
+            }
         }
     }
 
     async fn request<T: Serialize, U: DeserializeOwned>(
         &self,
-        method: reqwest::Method,
+        method: Method,
         url: Url,
         payload: Option<&T>,
     ) -> Result<U, RequestError> {
@@ -206,13 +224,13 @@ impl<'a> Repository<'a> {
         self.client.paginate::<Label>(self.labels_url.clone()).await
     }
 
-    pub(crate) async fn create_label(&self, label: Label) -> Result<Label, RequestError> {
+    async fn create_label(&self, label: Label) -> Result<Label, RequestError> {
         self.client
             .post::<Label, Label>(self.labels_url.clone(), &label)
             .await
     }
 
-    pub(crate) async fn update_label(
+    async fn update_label(
         &self,
         label: LabelName,
         payload: UpdateLabel,
@@ -237,12 +255,6 @@ pub(crate) enum BuildClientError {
 
 #[derive(Debug, Error)]
 pub(crate) enum RequestError {
-    #[error("failed to deserialize response body from {method} request to {url}")]
-    Deserialize {
-        method: Method,
-        url: Url,
-        source: reqwest::Error,
-    },
     #[error("failed to make {method} request to {url}")]
     Send {
         method: Method,
@@ -250,7 +262,13 @@ pub(crate) enum RequestError {
         source: reqwest::Error,
     },
     #[error(transparent)]
-    Status(#[from] Box<PrettyHttpError>),
+    Status(Box<PrettyHttpError>),
+    #[error("failed to deserialize response body from {method} request to {url}")]
+    Deserialize {
+        method: Method,
+        url: Url,
+        source: reqwest::Error,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -312,7 +330,7 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
 #[serde_as]
 #[skip_serializing_none]
 #[derive(Clone, Debug, PartialEq, Serialize)]
-pub(crate) struct UpdateLabel {
+struct UpdateLabel {
     new_name: Option<LabelName>,
     #[serde_as(as = "Option<AsHashlessRgb>")]
     color: Option<Color>,
@@ -327,52 +345,9 @@ pub(crate) enum LabelMakerError {
     Request(#[from] RequestError),
 }
 
-fn urljoin<I>(url: &Url, segments: I) -> Url
-where
-    I: IntoIterator,
-    I::Item: AsRef<str>,
-{
-    let mut url = url.clone();
-    // We have to convert to an owned String so that we're not trying to modify
-    // `url` with something immutably borrowed from it.
-    if let Some(p) = url
-        .path()
-        .strip_suffix('/')
-        .filter(|s| !s.is_empty())
-        .map(String::from)
-    {
-        url.set_path(&p);
-    }
-    url.path_segments_mut()
-        .expect("API URL should be able to be a base")
-        .extend(segments);
-    url
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::rstest;
-
-    #[rstest]
-    #[case("https://api.github.com")]
-    #[case("https://api.github.com/")]
-    fn test_urljoin_nopath(#[case] base: Url) {
-        let u = urljoin(&base, ["foo"]);
-        assert_eq!(u.as_str(), "https://api.github.com/foo");
-        let u = urljoin(&base, ["foo", "bar"]);
-        assert_eq!(u.as_str(), "https://api.github.com/foo/bar");
-    }
-
-    #[rstest]
-    #[case("https://api.github.com/foo/bar")]
-    #[case("https://api.github.com/foo/bar/")]
-    fn test_urljoin_path(#[case] base: Url) {
-        let u = urljoin(&base, ["gnusto"]);
-        assert_eq!(u.as_str(), "https://api.github.com/foo/bar/gnusto");
-        let u = urljoin(&base, ["gnusto", "cleesh"]);
-        assert_eq!(u.as_str(), "https://api.github.com/foo/bar/gnusto/cleesh");
-    }
 
     #[test]
     fn test_serialize_update_label_color() {

@@ -1,7 +1,6 @@
 mod client;
 mod config;
 mod labels;
-mod util;
 
 use crate::client::{GitHub, Repository};
 use crate::config::Config;
