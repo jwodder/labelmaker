@@ -284,6 +284,10 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
         for s in profile.specs() {
             res.extend(self.labels.resolve(s)?);
         }
+        if res.is_empty() {
+            log::info!("No changes to {}", self.repo.repo);
+            return Ok(());
+        }
         for r in res {
             match r {
                 LabelResolution::Operation(op) => {
