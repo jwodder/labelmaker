@@ -5,7 +5,6 @@ use reqwest::{header::HeaderMap, Method, Response, StatusCode};
 use serde_json::{to_string_pretty, value::Value};
 use std::fmt::{self, Write};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use thiserror::Error;
 use url::Url;
 
 // Retry configuration:
@@ -33,16 +32,31 @@ impl Retrier {
         }
     }
 
-    pub(super) async fn handle(&mut self, error: RetryCandidate) -> Result<Duration, RequestError> {
+    // Takes the return value of a call to `RequestBuilder::send()` that has
+    // not been run through `Response::error_for_status()`.
+    //
+    // - If the request was successful (status code and everything), returns
+    //   `Ok(RetryDecision::Success(response))`.
+    //
+    // - If the request should be retried, returns
+    //   `Ok(RetryDecision::Retry(delay))`.
+    //
+    // - If the request was a failure (possibly due to status code) and should
+    //   not be retried (possibly due to all retries having been exhausted),
+    //   returns an `Err`.
+    pub(super) async fn handle(
+        &mut self,
+        resp: Result<Response, reqwest::Error>,
+    ) -> Result<RetryDecision, RequestError> {
         self.attempts += 1;
         if self.attempts > RETRIES {
             log::trace!("Retries exhausted");
-            return self.raise(error).await;
+            return self.finalize(resp).await;
         }
         let now = Instant::now();
         if now > self.stop_time {
             log::trace!("Maximum total retry wait time exceeded");
-            return self.raise(error).await;
+            return self.finalize(resp).await;
         }
         let backoff = if self.attempts < 2 {
             // urllib3 says "most errors are resolved immediately by a second
@@ -53,9 +67,10 @@ impl Retrier {
             (BACKOFF_FACTOR * BACKOFF_BASE.powi(self.attempts - 1)).clamp(0.0, BACKOFF_MAX)
         };
         let backoff = Duration::from_secs_f64(backoff);
-        let delay = match error {
-            RetryCandidate::Transport(_) => backoff,
-            RetryCandidate::Status(r) if r.status() == StatusCode::FORBIDDEN => {
+        let delay = match resp {
+            Err(ref e) if e.is_builder() => return self.finalize(resp).await,
+            Err(_) => backoff,
+            Ok(r) if r.status() == StatusCode::FORBIDDEN => {
                 let parts = ResponseParts::from_response(r).await;
                 if let Some(v) = parts.headers.get("Retry-After") {
                     let secs = v
@@ -94,24 +109,35 @@ impl Retrier {
                         backoff
                     }
                 } else {
-                    return self.raise_parts(parts);
+                    return self.finalize_parts(parts);
                 }
             }
-            RetryCandidate::Status(r) if r.status().is_server_error() => backoff,
-            _ => return self.raise(error).await,
+            Ok(r) if r.status().is_server_error() => backoff,
+            _ => return self.finalize(resp).await,
         };
         let delay = delay.max(backoff);
         let time_left = self.stop_time.saturating_duration_since(Instant::now());
-        Ok(delay.clamp(Duration::ZERO, time_left))
+        Ok(RetryDecision::Retry(delay.clamp(Duration::ZERO, time_left)))
     }
 
-    async fn raise<T>(&self, error: RetryCandidate) -> Result<T, RequestError> {
-        Err(error
-            .into_error(self.method.clone(), self.url.clone())
-            .await)
+    async fn finalize(
+        &self,
+        resp: Result<Response, reqwest::Error>,
+    ) -> Result<RetryDecision, RequestError> {
+        match resp {
+            Ok(r) if r.status().is_client_error() || r.status().is_server_error() => Err(
+                RequestError::Status(Box::new(PrettyHttpError::new(self.method.clone(), r).await)),
+            ),
+            Ok(r) => Ok(RetryDecision::Success(r)),
+            Err(source) => Err(RequestError::Send {
+                method: self.method.clone(),
+                url: self.url.clone(),
+                source,
+            }),
+        }
     }
 
-    fn raise_parts<T>(&self, parts: ResponseParts) -> Result<T, RequestError> {
+    fn finalize_parts<T>(&self, parts: ResponseParts) -> Result<T, RequestError> {
         Err(RequestError::Status(Box::new(PrettyHttpError::from_parts(
             self.method.clone(),
             self.url.clone(),
@@ -120,34 +146,10 @@ impl Retrier {
     }
 }
 
-#[derive(Debug, Error)]
-pub(super) enum RetryCandidate {
-    Status(Response),
-    Transport(reqwest::Error),
-}
-
-impl RetryCandidate {
-    async fn into_error(self, method: Method, url: Url) -> RequestError {
-        match self {
-            RetryCandidate::Status(r) => {
-                RequestError::Status(Box::new(PrettyHttpError::new(method, r).await))
-            }
-            RetryCandidate::Transport(source) => RequestError::Send {
-                method,
-                url,
-                source,
-            },
-        }
-    }
-}
-
-impl fmt::Display for RetryCandidate {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RetryCandidate::Status(r) => write!(f, "Server returned {} response", r.status()),
-            RetryCandidate::Transport(e) => write!(f, "Request failed: {e}"),
-        }
-    }
+#[derive(Debug)]
+pub(super) enum RetryDecision {
+    Success(Response),
+    Retry(Duration),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -224,7 +226,11 @@ impl PrettyHttpError {
 
 impl fmt::Display for PrettyHttpError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Request to {} returned {}", self.url, self.status)?;
+        write!(
+            f,
+            "{} request to {} returned {}",
+            self.method, self.url, self.status
+        )?;
         if let Some(text) = &self.body {
             write!(indented(f).with_str("    "), "\n\n{text}\n")?;
         }
@@ -237,13 +243,10 @@ impl std::error::Error for PrettyHttpError {}
 /// Return the `rel="next"` URL, if any, from the response's "Link" header
 pub(crate) fn get_next_link(r: &Response) -> Option<Url> {
     let header_value = r.headers().get(reqwest::header::LINK)?.to_str().ok()?;
-    Some(
-        parse_link_header::parse_with_rel(header_value)
-            .ok()?
-            .get("next")?
-            .uri
-            .clone(),
-    )
+    parse_link_header::parse_with_rel(header_value)
+        .ok()?
+        .get("next")
+        .map(|link| link.uri.clone())
 }
 
 /// Returns `true` iff the response's Content-Type header indicates the body is

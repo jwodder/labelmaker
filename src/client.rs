@@ -95,25 +95,19 @@ impl GitHub {
             }
             let req = req
                 .try_clone()
-                .expect("our non-streaming requests should be clonable");
-            let error = match req.send().await {
-                Ok(r) if r.status().is_client_error() || r.status().is_server_error() => {
-                    RetryCandidate::Status(r)
-                }
-                Ok(r) => return Ok(r),
-                Err(source) if source.is_builder() => {
-                    return Err(RequestError::Send {
-                        method,
-                        url,
-                        source,
-                    })
-                }
-                Err(e) => RetryCandidate::Transport(e),
+                .expect("non-streaming requests should be clonable");
+            let resp = req.send().await;
+            let desc = match resp {
+                Ok(ref r) => format!("Server returned {} response", r.status()),
+                Err(ref e) => format!("Request failed: {e}"),
             };
-            let msg = error.to_string();
-            let delay = retrier.handle(error).await?;
-            log::warn!("{msg}; waiting {delay:?} and retrying");
-            sleep(delay).await;
+            match retrier.handle(resp).await? {
+                RetryDecision::Success(r) => return Ok(r),
+                RetryDecision::Retry(delay) => {
+                    log::warn!("{desc}; waiting {delay:?} and retrying");
+                    sleep(delay).await;
+                }
+            }
         }
     }
 
