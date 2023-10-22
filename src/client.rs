@@ -1,17 +1,17 @@
+mod util;
+use self::util::*;
 use crate::config::Profile;
 use crate::labels::*;
-use crate::util::*;
 use csscolorparser::Color;
 use ghrepo::GHRepo;
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, InvalidHeaderValue},
-    Client, ClientBuilder, Method, Response, StatusCode,
+    Client, ClientBuilder, Method, Response,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::{serde_as, skip_serializing_none};
 use std::cell::Cell;
-use std::fmt;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::time::sleep;
 use url::Url;
@@ -30,13 +30,6 @@ static GITHUB_API_URL: &str = "https://api.github.com";
 static MUTATING_METHODS: &[Method] = &[Method::POST, Method::PATCH, Method::PUT, Method::DELETE];
 
 const MUTATION_DELAY: Duration = Duration::from_secs(1);
-
-// Retry configuration:
-const RETRIES: i32 = 10;
-const BACKOFF_FACTOR: f64 = 1.0;
-const BACKOFF_BASE: f64 = 1.25;
-const BACKOFF_MAX: f64 = 120.0;
-const TOTAL_WAIT: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Debug)]
 pub(crate) struct GitHub {
@@ -237,13 +230,13 @@ impl<'a> Repository<'a> {
         self.client.paginate::<Label>(self.labels_url.clone()).await
     }
 
-    pub(crate) async fn create_label(&self, label: Label) -> Result<Label, RequestError> {
+    async fn create_label(&self, label: Label) -> Result<Label, RequestError> {
         self.client
             .post::<Label, Label>(self.labels_url.clone(), &label)
             .await
     }
 
-    pub(crate) async fn update_label(
+    async fn update_label(
         &self,
         label: LabelName,
         payload: UpdateLabel,
@@ -282,163 +275,6 @@ pub(crate) enum RequestError {
         url: Url,
         source: reqwest::Error,
     },
-}
-
-#[derive(Debug, Error)]
-enum RetryCandidate {
-    Status(Response),
-    Transport(reqwest::Error),
-}
-
-impl RetryCandidate {
-    async fn into_error(self, method: Method, url: Url) -> RequestError {
-        match self {
-            RetryCandidate::Status(r) => {
-                RequestError::Status(Box::new(PrettyHttpError::new(method, r).await))
-            }
-            RetryCandidate::Transport(source) => RequestError::Send {
-                method,
-                url,
-                source,
-            },
-        }
-    }
-}
-
-impl fmt::Display for RetryCandidate {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RetryCandidate::Status(r) => write!(f, "Server returned {} response", r.status()),
-            RetryCandidate::Transport(e) => write!(f, "Request failed: {e}"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ResponseParts {
-    pub(crate) status: StatusCode,
-    pub(crate) headers: HeaderMap,
-    pub(crate) text: Option<String>,
-}
-
-impl ResponseParts {
-    async fn from_response(r: Response) -> ResponseParts {
-        let status = r.status();
-        let headers = r.headers().clone();
-        let text = r.text().await.ok();
-        ResponseParts {
-            status,
-            headers,
-            text,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct Retrier {
-    method: Method,
-    url: Url,
-    attempts: i32,
-    stop_time: Instant,
-}
-
-impl Retrier {
-    fn new(method: Method, url: Url) -> Retrier {
-        Retrier {
-            method,
-            url,
-            attempts: 0,
-            stop_time: Instant::now() + TOTAL_WAIT,
-        }
-    }
-
-    async fn handle(&mut self, error: RetryCandidate) -> Result<Duration, RequestError> {
-        self.attempts += 1;
-        if self.attempts > RETRIES {
-            log::trace!("Retries exhausted");
-            return self.raise(error).await;
-        }
-        let now = Instant::now();
-        if now > self.stop_time {
-            log::trace!("Maximum total retry wait time exceeded");
-            return self.raise(error).await;
-        }
-        let backoff = if self.attempts < 2 {
-            // urllib3 says "most errors are resolved immediately by a second
-            // try without a delay" and thus doesn't sleep on the first retry,
-            // but that seems irresponsible
-            BACKOFF_FACTOR * 0.1
-        } else {
-            (BACKOFF_FACTOR * BACKOFF_BASE.powi(self.attempts - 1)).clamp(0.0, BACKOFF_MAX)
-        };
-        let backoff = Duration::from_secs_f64(backoff);
-        let delay = match error {
-            RetryCandidate::Transport(_) => backoff,
-            RetryCandidate::Status(r) if r.status() == StatusCode::FORBIDDEN => {
-                let parts = ResponseParts::from_response(r).await;
-                if let Some(v) = parts.headers.get("Retry-After") {
-                    let secs = v
-                        .to_str()
-                        .ok()
-                        .and_then(|s| s.parse::<u64>().ok())
-                        .map(|n| n + 1);
-                    if secs.is_some() {
-                        log::trace!("Server responded with 403 and Retry-After header");
-                    }
-                    Duration::from_secs(secs.unwrap_or_default())
-                } else if parts
-                    .text
-                    .as_ref()
-                    .is_some_and(|s| s.contains("rate limit"))
-                {
-                    if parts
-                        .headers
-                        .get("x-ratelimit-remaining")
-                        .and_then(|v| v.to_str().ok())
-                        == Some("0")
-                    {
-                        if let Some(reset) = parts
-                            .headers
-                            .get("x-ratelimit-reset")
-                            .and_then(|v| v.to_str().ok())
-                            .and_then(|s| s.parse::<u64>().ok())
-                        {
-                            log::trace!("Primary rate limit exceeded; waiting for reset");
-                            time_till_timestamp(reset)
-                                .map(|d| d + Duration::from_secs(1))
-                                .unwrap_or_default()
-                        } else {
-                            Duration::ZERO
-                        }
-                    } else {
-                        log::trace!("Secondary rate limit triggered");
-                        backoff
-                    }
-                } else {
-                    return self.raise_parts(parts);
-                }
-            }
-            RetryCandidate::Status(r) if r.status().is_server_error() => backoff,
-            _ => return self.raise(error).await,
-        };
-        let delay = delay.max(backoff);
-        let time_left = self.stop_time.saturating_duration_since(Instant::now());
-        Ok(delay.clamp(Duration::ZERO, time_left))
-    }
-
-    async fn raise<T>(&self, error: RetryCandidate) -> Result<T, RequestError> {
-        Err(error
-            .into_error(self.method.clone(), self.url.clone())
-            .await)
-    }
-
-    fn raise_parts<T>(&self, parts: ResponseParts) -> Result<T, RequestError> {
-        Err(RequestError::Status(Box::new(PrettyHttpError::from_parts(
-            self.method.clone(),
-            self.url.clone(),
-            parts,
-        ))))
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -500,7 +336,7 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
 #[serde_as]
 #[skip_serializing_none]
 #[derive(Clone, Debug, PartialEq, Serialize)]
-pub(crate) struct UpdateLabel {
+struct UpdateLabel {
     new_name: Option<LabelName>,
     #[serde_as(as = "Option<AsHashlessRgb>")]
     color: Option<Color>,
@@ -515,58 +351,9 @@ pub(crate) enum LabelMakerError {
     Request(#[from] RequestError),
 }
 
-fn urljoin<I>(url: &Url, segments: I) -> Url
-where
-    I: IntoIterator,
-    I::Item: AsRef<str>,
-{
-    let mut url = url.clone();
-    // We have to convert to an owned String so that we're not trying to modify
-    // `url` with something immutably borrowed from it.
-    if let Some(p) = url
-        .path()
-        .strip_suffix('/')
-        .filter(|s| !s.is_empty())
-        .map(String::from)
-    {
-        url.set_path(&p);
-    }
-    url.path_segments_mut()
-        .expect("API URL should be able to be a base")
-        .extend(segments);
-    url
-}
-
-fn time_till_timestamp(ts: u64) -> Option<Duration> {
-    (UNIX_EPOCH + Duration::from_secs(ts))
-        .duration_since(SystemTime::now())
-        .ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::rstest;
-
-    #[rstest]
-    #[case("https://api.github.com")]
-    #[case("https://api.github.com/")]
-    fn test_urljoin_nopath(#[case] base: Url) {
-        let u = urljoin(&base, ["foo"]);
-        assert_eq!(u.as_str(), "https://api.github.com/foo");
-        let u = urljoin(&base, ["foo", "bar"]);
-        assert_eq!(u.as_str(), "https://api.github.com/foo/bar");
-    }
-
-    #[rstest]
-    #[case("https://api.github.com/foo/bar")]
-    #[case("https://api.github.com/foo/bar/")]
-    fn test_urljoin_path(#[case] base: Url) {
-        let u = urljoin(&base, ["gnusto"]);
-        assert_eq!(u.as_str(), "https://api.github.com/foo/bar/gnusto");
-        let u = urljoin(&base, ["gnusto", "cleesh"]);
-        assert_eq!(u.as_str(), "https://api.github.com/foo/bar/gnusto/cleesh");
-    }
 
     #[test]
     fn test_serialize_update_label_color() {
