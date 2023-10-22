@@ -448,7 +448,7 @@ impl fmt::Display for LabelWarning {
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub(crate) enum LabelError {
-    #[error("label {label:?} has multiple rename-from candidates: {:?}", .candidates.iter().format(", "))]
+    #[error("multiple rename-from candidates exist for label {label:?}: {:?}", .candidates.iter().format(", "))]
     MultipleRenameCandidates {
         label: LabelName,
         candidates: Vec<LabelName>,
@@ -1153,7 +1153,7 @@ mod tests {
             });
             assert_eq!(
                 r.unwrap_err().to_string(),
-                r#"label "quux" has multiple rename-from candidates: "foo", "BAR""#
+                r#"multiple rename-from candidates exist for label "quux": "foo", "BAR""#
             );
         }
 
