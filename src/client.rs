@@ -322,7 +322,7 @@ pub(crate) struct UpdateLabel {
 #[derive(Debug, Error)]
 pub(crate) enum LabelMakerError {
     #[error(transparent)]
-    Label(#[from] LabelError),
+    Resolve(#[from] SpecResolveError),
     #[error("GitHub API request failed")]
     Request(#[from] RequestError),
 }

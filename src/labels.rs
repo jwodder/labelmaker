@@ -328,7 +328,10 @@ impl<R: Rng> LabelSet<R> {
         self.data.insert(label.name.to_icase(), label);
     }
 
-    pub(crate) fn resolve(&mut self, spec: &LabelSpec) -> Result<Vec<LabelResolution>, LabelError> {
+    pub(crate) fn resolve(
+        &mut self,
+        spec: &LabelSpec,
+    ) -> Result<Vec<LabelResolution>, SpecResolveError> {
         let mut res = Vec::with_capacity(2);
         let iname = spec.name.to_icase();
         let mut rename_candidates = spec
@@ -354,7 +357,7 @@ impl<R: Rng> LabelSet<R> {
                         }))
                     }
                     OnRenameClash::Error => {
-                        return Err(LabelError::RenameClash {
+                        return Err(SpecResolveError::RenameClash {
                             label: extant.name.clone(),
                             candidates: rename_candidates
                                 .into_iter()
@@ -367,7 +370,7 @@ impl<R: Rng> LabelSet<R> {
             Some((extant, builder))
         } else if !rename_candidates.is_empty() {
             if rename_candidates.len() > 1 {
-                return Err(LabelError::MultipleRenameCandidates {
+                return Err(SpecResolveError::MultipleRenameCandidates {
                     label: spec.name.clone(),
                     candidates: rename_candidates
                         .into_iter()
@@ -447,7 +450,7 @@ impl fmt::Display for LabelWarning {
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
-pub(crate) enum LabelError {
+pub(crate) enum SpecResolveError {
     #[error("multiple rename-from candidates exist for label {label:?}: {:?}", .candidates.iter().format(", "))]
     MultipleRenameCandidates {
         label: LabelName,
@@ -1147,7 +1150,7 @@ mod tests {
                 },
             };
             let r = labels.resolve(&spec);
-            assert_matches!(r, Err(LabelError::MultipleRenameCandidates {ref label, ref candidates}) => {
+            assert_matches!(r, Err(SpecResolveError::MultipleRenameCandidates {ref label, ref candidates}) => {
                 assert_eq!(label, "quux");
                 assert_eq!(candidates, &["foo".parse::<LabelName>().unwrap(), "BAR".parse().unwrap()]);
             });
@@ -1218,7 +1221,7 @@ mod tests {
                 },
             };
             let r = labels.resolve(&spec);
-            assert_matches!(r, Err(LabelError::RenameClash {ref label, ref candidates}) => {
+            assert_matches!(r, Err(SpecResolveError::RenameClash {ref label, ref candidates}) => {
                 assert_eq!(label, "foo");
                 assert_eq!(candidates, &["BAR".parse::<LabelName>().unwrap()]);
             });
@@ -1308,7 +1311,7 @@ mod tests {
                 },
             };
             let r = labels.resolve(&spec);
-            assert_matches!(r, Err(LabelError::RenameClash {ref label, ref candidates}) => {
+            assert_matches!(r, Err(SpecResolveError::RenameClash {ref label, ref candidates}) => {
                 assert_eq!(label, "foo");
                 assert_eq!(candidates, &["BAR".parse::<LabelName>().unwrap()]);
             });
@@ -1394,7 +1397,7 @@ mod tests {
                 },
             };
             let r = labels.resolve(&spec);
-            assert_matches!(r, Err(LabelError::RenameClash {ref label, ref candidates}) => {
+            assert_matches!(r, Err(SpecResolveError::RenameClash {ref label, ref candidates}) => {
                 assert_eq!(label, "foo");
                 assert_eq!(candidates, &["no-desc".parse::<LabelName>().unwrap(), "BAR".parse().unwrap()]);
             });
