@@ -5,13 +5,13 @@ use csscolorparser::Color;
 use ghrepo::GHRepo;
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, InvalidHeaderValue},
-    Client, ClientBuilder, Method, Response,
+    Client, ClientBuilder, Method, Response, StatusCode,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::{to_string_pretty, value::Value};
 use serde_with::{serde_as, skip_serializing_none};
 use std::cell::Cell;
-use std::time::{Duration, Instant};
+use std::fmt;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use tokio::time::sleep;
 use url::Url;
@@ -30,6 +30,13 @@ static GITHUB_API_URL: &str = "https://api.github.com";
 static MUTATING_METHODS: &[Method] = &[Method::POST, Method::PATCH, Method::PUT, Method::DELETE];
 
 const MUTATION_DELAY: Duration = Duration::from_secs(1);
+
+// Retry configuration:
+const RETRIES: i32 = 10;
+const BACKOFF_FACTOR: f64 = 1.0;
+const BACKOFF_BASE: f64 = 1.25;
+const BACKOFF_MAX: f64 = 120.0;
+const TOTAL_WAIT: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Debug)]
 pub(crate) struct GitHub {
@@ -79,7 +86,7 @@ impl GitHub {
                 let delay = MUTATION_DELAY
                     .saturating_sub(Instant::now().saturating_duration_since(lastmut));
                 if !delay.is_zero() {
-                    log::debug!("Sleeping for {delay:?} between mutating requests");
+                    log::trace!("Sleeping for {delay:?} between mutating requests");
                     sleep(delay).await;
                 }
             }
@@ -88,33 +95,32 @@ impl GitHub {
         if let Some(p) = payload {
             req = req.json(p);
         }
-        if MUTATING_METHODS.contains(&method) {
-            self.last_mutation.set(Some(Instant::now()));
-        }
-        match req.send().await {
-            Ok(r) if r.status().is_client_error() || r.status().is_server_error() => {
-                let status = r.status();
-                // If the response body is JSON, pretty-print it.
-                let body = if is_json_response(&r) {
-                    r.json::<Value>().await.ok().map(|v| {
-                        to_string_pretty(&v).expect("Re-JSONifying a JSON response should not fail")
-                    })
-                } else {
-                    r.text().await.ok()
-                };
-                Err(RequestError::Status(Box::new(PrettyHttpError {
-                    method,
-                    url,
-                    status,
-                    body,
-                })))
+        let mut retrier = Retrier::new(method.clone(), url.clone());
+        loop {
+            if MUTATING_METHODS.contains(&method) {
+                self.last_mutation.set(Some(Instant::now()));
             }
-            Ok(r) => Ok(r),
-            Err(source) => Err(RequestError::Send {
-                method,
-                url,
-                source,
-            }),
+            let req = req
+                .try_clone()
+                .expect("our non-streaming requests should be clonable");
+            let error = match req.send().await {
+                Ok(r) if r.status().is_client_error() || r.status().is_server_error() => {
+                    RetryCandidate::Status(r)
+                }
+                Ok(r) => return Ok(r),
+                Err(source) if source.is_builder() => {
+                    return Err(RequestError::Send {
+                        method,
+                        url,
+                        source,
+                    })
+                }
+                Err(e) => RetryCandidate::Transport(e),
+            };
+            let msg = error.to_string();
+            let delay = retrier.handle(error).await?;
+            log::warn!("{msg}; waiting {delay:?} and retrying");
+            sleep(delay).await;
         }
     }
 
@@ -262,12 +268,6 @@ pub(crate) enum BuildClientError {
 
 #[derive(Debug, Error)]
 pub(crate) enum RequestError {
-    #[error("failed to deserialize response body from {method} request to {url}")]
-    Deserialize {
-        method: Method,
-        url: Url,
-        source: reqwest::Error,
-    },
     #[error("failed to make {method} request to {url}")]
     Send {
         method: Method,
@@ -275,7 +275,170 @@ pub(crate) enum RequestError {
         source: reqwest::Error,
     },
     #[error(transparent)]
-    Status(#[from] Box<PrettyHttpError>),
+    Status(Box<PrettyHttpError>),
+    #[error("failed to deserialize response body from {method} request to {url}")]
+    Deserialize {
+        method: Method,
+        url: Url,
+        source: reqwest::Error,
+    },
+}
+
+#[derive(Debug, Error)]
+enum RetryCandidate {
+    Status(Response),
+    Transport(reqwest::Error),
+}
+
+impl RetryCandidate {
+    async fn into_error(self, method: Method, url: Url) -> RequestError {
+        match self {
+            RetryCandidate::Status(r) => {
+                RequestError::Status(Box::new(PrettyHttpError::new(method, r).await))
+            }
+            RetryCandidate::Transport(source) => RequestError::Send {
+                method,
+                url,
+                source,
+            },
+        }
+    }
+}
+
+impl fmt::Display for RetryCandidate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RetryCandidate::Status(r) => write!(f, "Server returned {} response", r.status()),
+            RetryCandidate::Transport(e) => write!(f, "Request failed: {e}"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ResponseParts {
+    pub(crate) status: StatusCode,
+    pub(crate) headers: HeaderMap,
+    pub(crate) text: Option<String>,
+}
+
+impl ResponseParts {
+    async fn from_response(r: Response) -> ResponseParts {
+        let status = r.status();
+        let headers = r.headers().clone();
+        let text = r.text().await.ok();
+        ResponseParts {
+            status,
+            headers,
+            text,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Retrier {
+    method: Method,
+    url: Url,
+    attempts: i32,
+    stop_time: Instant,
+}
+
+impl Retrier {
+    fn new(method: Method, url: Url) -> Retrier {
+        Retrier {
+            method,
+            url,
+            attempts: 0,
+            stop_time: Instant::now() + TOTAL_WAIT,
+        }
+    }
+
+    async fn handle(&mut self, error: RetryCandidate) -> Result<Duration, RequestError> {
+        self.attempts += 1;
+        if self.attempts > RETRIES {
+            log::trace!("Retries exhausted");
+            return self.raise(error).await;
+        }
+        let now = Instant::now();
+        if now > self.stop_time {
+            log::trace!("Maximum total retry wait time exceeded");
+            return self.raise(error).await;
+        }
+        let backoff = if self.attempts < 2 {
+            // urllib3 says "most errors are resolved immediately by a second
+            // try without a delay" and thus doesn't sleep on the first retry,
+            // but that seems irresponsible
+            BACKOFF_FACTOR * 0.1
+        } else {
+            (BACKOFF_FACTOR * BACKOFF_BASE.powi(self.attempts - 1)).clamp(0.0, BACKOFF_MAX)
+        };
+        let backoff = Duration::from_secs_f64(backoff);
+        let delay = match error {
+            RetryCandidate::Transport(_) => backoff,
+            RetryCandidate::Status(r) if r.status() == StatusCode::FORBIDDEN => {
+                let parts = ResponseParts::from_response(r).await;
+                if let Some(v) = parts.headers.get("Retry-After") {
+                    let secs = v
+                        .to_str()
+                        .ok()
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .map(|n| n + 1);
+                    if secs.is_some() {
+                        log::trace!("Server responded with 403 and Retry-After header");
+                    }
+                    Duration::from_secs(secs.unwrap_or_default())
+                } else if parts
+                    .text
+                    .as_ref()
+                    .is_some_and(|s| s.contains("rate limit"))
+                {
+                    if parts
+                        .headers
+                        .get("x-ratelimit-remaining")
+                        .and_then(|v| v.to_str().ok())
+                        == Some("0")
+                    {
+                        if let Some(reset) = parts
+                            .headers
+                            .get("x-ratelimit-reset")
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|s| s.parse::<u64>().ok())
+                        {
+                            log::trace!("Primary rate limit exceeded; waiting for reset");
+                            time_till_timestamp(reset)
+                                .map(|d| d + Duration::from_secs(1))
+                                .unwrap_or_default()
+                        } else {
+                            Duration::ZERO
+                        }
+                    } else {
+                        log::trace!("Secondary rate limit triggered");
+                        backoff
+                    }
+                } else {
+                    return self.raise_parts(parts);
+                }
+            }
+            RetryCandidate::Status(r) if r.status().is_server_error() => backoff,
+            _ => return self.raise(error).await,
+        };
+        let delay = delay.max(backoff);
+        let time_left = self.stop_time.saturating_duration_since(Instant::now());
+        Ok(delay.clamp(Duration::ZERO, time_left))
+    }
+
+    async fn raise<T>(&self, error: RetryCandidate) -> Result<T, RequestError> {
+        Err(error
+            .into_error(self.method.clone(), self.url.clone())
+            .await)
+    }
+
+    fn raise_parts<T>(&self, parts: ResponseParts) -> Result<T, RequestError> {
+        Err(RequestError::Status(Box::new(PrettyHttpError::from_parts(
+            self.method.clone(),
+            self.url.clone(),
+            parts,
+        ))))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -372,6 +535,12 @@ where
         .expect("API URL should be able to be a base")
         .extend(segments);
     url
+}
+
+fn time_till_timestamp(ts: u64) -> Option<Duration> {
+    (UNIX_EPOCH + Duration::from_secs(ts))
+        .duration_since(SystemTime::now())
+        .ok()
 }
 
 #[cfg(test)]

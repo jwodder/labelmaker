@@ -1,6 +1,8 @@
+use crate::client::ResponseParts;
 use indenter::indented;
 use mime::{Mime, JSON};
-use reqwest::{Method, Response, StatusCode};
+use reqwest::{header::HeaderMap, Method, Response, StatusCode};
+use serde_json::{to_string_pretty, value::Value};
 use std::fmt::{self, Write};
 use url::Url;
 
@@ -8,10 +10,52 @@ use url::Url;
 /// — and, if that body is JSON, it's pretty-printed
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PrettyHttpError {
-    pub(crate) method: Method,
-    pub(crate) url: Url,
-    pub(crate) status: StatusCode,
-    pub(crate) body: Option<String>,
+    method: Method,
+    url: Url,
+    status: StatusCode,
+    body: Option<String>,
+}
+
+impl PrettyHttpError {
+    pub(crate) async fn new(method: Method, r: reqwest::Response) -> PrettyHttpError {
+        let url = r.url().clone();
+        let status = r.status();
+        // If the response body is JSON, pretty-print it.
+        let body = if is_json_response(&r) {
+            r.json::<Value>().await.ok().map(|v| {
+                to_string_pretty(&v).expect("Re-JSONifying a JSON response should not fail")
+            })
+        } else {
+            r.text().await.ok()
+        };
+        PrettyHttpError {
+            method,
+            url,
+            status,
+            body,
+        }
+    }
+
+    pub(crate) fn from_parts(method: Method, url: Url, parts: ResponseParts) -> PrettyHttpError {
+        let status = parts.status;
+        // If the response body is JSON, pretty-print it.
+        let body = if has_json_content_type(&parts.headers) {
+            parts
+                .text
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .map(|v| {
+                    to_string_pretty(&v).expect("Re-JSONifying a JSON response should not fail")
+                })
+        } else {
+            parts.text
+        };
+        PrettyHttpError {
+            method,
+            url,
+            status,
+            body,
+        }
+    }
 }
 
 impl fmt::Display for PrettyHttpError {
@@ -40,13 +84,16 @@ pub(crate) fn get_next_link(r: &Response) -> Option<Url> {
 
 /// Returns `true` iff the response's Content-Type header indicates the body is
 /// JSON
-pub(crate) fn is_json_response(r: &Response) -> bool {
-    r.headers()
+fn is_json_response(r: &Response) -> bool {
+    has_json_content_type(r.headers())
+}
+
+fn has_json_content_type(headers: &HeaderMap) -> bool {
+    headers
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<Mime>().ok())
-        .map(|ct| {
+        .is_some_and(|ct| {
             ct.type_() == "application" && (ct.subtype() == "json" || ct.suffix() == Some(JSON))
         })
-        .unwrap_or(false)
 }
