@@ -1,3 +1,4 @@
+use crate::config::Profile;
 use crate::labels::*;
 use crate::util::*;
 use csscolorparser::Color;
@@ -9,7 +10,6 @@ use reqwest::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{to_string_pretty, value::Value};
 use serde_with::{serde_as, skip_serializing_none};
-use std::borrow::Borrow;
 use thiserror::Error;
 use url::Url;
 
@@ -261,14 +261,10 @@ pub(crate) struct LabelMaker<'a, R: rand::Rng> {
 }
 
 impl<'a, R: rand::Rng> LabelMaker<'a, R> {
-    pub(crate) async fn make<I>(&mut self, specs: I) -> Result<(), LabelMakerError>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<LabelSpec>,
-    {
+    pub(crate) async fn make(&mut self, profile: &Profile) -> Result<(), LabelMakerError> {
         let mut res = Vec::new();
-        for s in specs {
-            res.extend(self.resolve(s.borrow())?);
+        for s in &profile.specs {
+            res.extend(self.labels.resolve(s)?);
         }
         for r in res {
             match r {
@@ -284,11 +280,7 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
         Ok(())
     }
 
-    pub(crate) fn resolve(&mut self, spec: &LabelSpec) -> Result<Vec<LabelResolution>, LabelError> {
-        self.labels.resolve(spec)
-    }
-
-    pub(crate) async fn execute(&mut self, op: LabelOperation) -> Result<(), RequestError> {
+    async fn execute(&mut self, op: LabelOperation) -> Result<(), RequestError> {
         match op {
             LabelOperation::Create(label) => {
                 let created = self.repo.create_label(label).await?;
