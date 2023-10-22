@@ -263,7 +263,7 @@ pub(crate) struct LabelMaker<'a, R: rand::Rng> {
 impl<'a, R: rand::Rng> LabelMaker<'a, R> {
     pub(crate) async fn make(&mut self, profile: &Profile) -> Result<(), LabelMakerError> {
         let mut res = Vec::new();
-        for s in &profile.specs {
+        for s in profile.specs() {
             res.extend(self.labels.resolve(s)?);
         }
         for r in res {

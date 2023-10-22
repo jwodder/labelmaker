@@ -229,8 +229,9 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelSpec {
     pub(crate) name: LabelName,
-    // Invariant: rename_from contains neither duplicates (*modulo* name
-    // casing) nor the same string as `name` (*modulo* case)
+    // Invariant (enforced on creation by Config::get_profile): rename_from
+    // contains neither duplicates (*modulo* name casing) nor the same string
+    // as `name` (*modulo* case)
     pub(crate) rename_from: Vec<LabelName>,
     pub(crate) options: LabelOptions,
 }

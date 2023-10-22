@@ -150,8 +150,20 @@ impl Config {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Profile {
-    pub(crate) name: String,
-    pub(crate) specs: Vec<LabelSpec>,
+    name: String,
+    // Invariant (enforced on creation by Config::get_profile): The various
+    // LabelSpecs do not step on each others' toes
+    specs: Vec<LabelSpec>,
+}
+
+impl Profile {
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub(crate) fn specs(&self) -> &[LabelSpec] {
+        &self.specs
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
