@@ -310,12 +310,16 @@ mod tests {
     }
 
     #[rstest]
-    #[case("foo#bar", "https://api.github.com/foo%23bar")]
-    #[case("foo%bar", "https://api.github.com/foo%25bar")]
-    #[case("foo/bar", "https://api.github.com/foo%2Fbar")]
-    #[case("foo?bar", "https://api.github.com/foo%3Fbar")]
+    #[case("foo#bar", "https://api.github.com/base/foo%23bar")]
+    #[case("foo%bar", "https://api.github.com/base/foo%25bar")]
+    #[case("foo/bar", "https://api.github.com/base/foo%2Fbar")]
+    #[case("foo?bar", "https://api.github.com/base/foo%3Fbar")]
+    #[ignore]
+    #[case(".", "https://api.github.com/base/%2E")]
+    #[ignore]
+    #[case("..", "https://api.github.com/base/%2E%2E")]
     fn test_urljoin_special_chars(#[case] path: &str, #[case] expected: &str) {
-        let base = Url::parse("https://api.github.com").unwrap();
+        let base = Url::parse("https://api.github.com/base").unwrap();
         let u = urljoin(&base, [path]);
         assert_eq!(u.as_str(), expected);
     }
