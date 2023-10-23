@@ -74,11 +74,13 @@ impl std::str::FromStr for LabelName {
     type Err = ParseLabelNameError;
 
     fn from_str(s: &str) -> Result<LabelName, ParseLabelNameError> {
-        let s = s.trim();
+        let s = s.trim_matches(['\t', '\n', '\x0B', '\x0C', '\r', ' '].as_slice());
         if s.is_empty() {
             Err(ParseLabelNameError)
         } else {
-            Ok(LabelName(s.into()))
+            Ok(LabelName(
+                s.chars().map(|c| if c == '\n' { ' ' } else { c }).collect(),
+            ))
         }
     }
 }
@@ -575,37 +577,46 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_trimmed_label_name() {
-        let name = " foo ".parse::<LabelName>().unwrap();
-        assert_eq!(name, "foo");
-        assert_eq!(name.to_string(), "foo");
-        assert_eq!(name.as_ref(), "foo");
-        assert_eq!(format!("{name:?}"), r#""foo""#);
-        let cntr = NameContainer { name };
-        assert_eq!(serde_json::to_string(&cntr).unwrap(), r#"{"name":"foo"}"#);
+    #[rstest]
+    #[case(" foo ", "foo")]
+    #[case("foo ", "foo")]
+    #[case(" foo", "foo")]
+    #[case("\t\n\x0B\x0C\r foo", "foo")]
+    #[case("foo\t\n\x0B\x0C\r ", "foo")]
+    #[case("foo\nbar", "foo bar")]
+    #[case("foo \nbar", "foo  bar")]
+    #[case("foo\tbar", "foo\tbar")]
+    #[case("foo \tbar", "foo \tbar")]
+    fn test_normalized_label_name(#[case] before: &str, #[case] after: &str) {
+        let name = before.parse::<LabelName>().unwrap();
+        assert_eq!(name, after);
+        assert_eq!(name.to_string(), after);
+        assert_eq!(name.as_ref(), after);
+        assert_eq!(format!("{name:?}"), format!("{after:?}"));
+        let cntr = NameContainer { name: name.clone() };
+        let before_json = serde_json::json!({"name": before}).to_string();
         assert_eq!(
-            serde_json::from_str::<NameContainer>(r#"{"name":"foo"}"#).unwrap(),
+            serde_json::from_str::<NameContainer>(&before_json).unwrap(),
             cntr
         );
-        assert_eq!(
-            serde_json::from_str::<NameContainer>(r#"{"name":" foo "}"#).unwrap(),
-            cntr
-        );
+        let after_json = serde_json::json!({"name": after}).to_string();
+        assert_eq!(serde_json::to_string(&cntr).unwrap(), after_json);
     }
 
-    #[test]
-    fn test_empty_label_name() {
-        let r = "".parse::<LabelName>();
+    #[rstest]
+    #[case("")]
+    #[case("\t")]
+    #[case("\n")]
+    #[case("\x0B")]
+    #[case("\x0C")]
+    #[case("\r")]
+    #[case(" ")]
+    #[case("\t\n\x0B\x0C\r ")]
+    fn test_label_name_error(#[case] name: &str) {
+        let r = name.parse::<LabelName>();
         assert_eq!(r, Err(ParseLabelNameError));
-        assert!(serde_json::from_str::<NameContainer>(r#"{"name":""}"#).is_err());
-    }
-
-    #[test]
-    fn test_whitespace_label_name() {
-        let r = " ".parse::<LabelName>();
-        assert_eq!(r, Err(ParseLabelNameError));
-        assert!(serde_json::from_str::<NameContainer>(r#"{"name":" "}"#).is_err());
+        let json = serde_json::json!({"name": name}).to_string();
+        assert!(serde_json::from_str::<NameContainer>(&json).is_err());
     }
 
     #[serde_as]

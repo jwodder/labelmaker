@@ -1,3 +1,7 @@
+v0.3.0 (in development)
+-----------------------
+- Properly normalize whitespace in label names
+
 v0.2.0 (2023-10-22)
 -------------------
 - Sleep between mutating API requests in order to keep them at least one second
