@@ -317,4 +317,15 @@ mod tests {
         let u = urljoin(&base, ["gnusto", "cleesh"]);
         assert_eq!(u.as_str(), "https://api.github.com/foo/bar/gnusto/cleesh");
     }
+
+    #[rstest]
+    #[case("foo#bar", "https://api.github.com/foo%23bar")]
+    #[case("foo%bar", "https://api.github.com/foo%25bar")]
+    #[case("foo/bar", "https://api.github.com/foo%2Fbar")]
+    #[case("foo?bar", "https://api.github.com/foo%3Fbar")]
+    fn test_urljoin_special_chars(#[case] path: &str, #[case] expected: &str) {
+        let base = Url::parse("https://api.github.com").unwrap();
+        let u = urljoin(&base, [path]);
+        assert_eq!(u.as_str(), expected);
+    }
 }
