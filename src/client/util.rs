@@ -271,18 +271,9 @@ where
     I::Item: AsRef<str>,
 {
     let mut url = url.clone();
-    // We have to convert to an owned String so that we're not trying to modify
-    // `url` with something immutably borrowed from it.
-    if let Some(p) = url
-        .path()
-        .strip_suffix('/')
-        .filter(|s| !s.is_empty())
-        .map(String::from)
-    {
-        url.set_path(&p);
-    }
     url.path_segments_mut()
         .expect("API URL should be able to be a base")
+        .pop_if_empty()
         .extend(segments);
     url
 }
