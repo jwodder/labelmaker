@@ -3,7 +3,7 @@ mod config;
 mod labels;
 
 use crate::client::{GitHub, Repository};
-use crate::config::{Config, ConfigError, Profile};
+use crate::config::{Config, Profile, ProfileError};
 use crate::labels::*;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
@@ -259,7 +259,7 @@ impl Make {
         Ok(())
     }
 
-    fn into_profile(self) -> Result<MakeProfile, ConfigError> {
+    fn into_profile(self) -> Result<MakeProfile, ProfileError> {
         let color = match self.color {
             None => ColorSpec::default(),
             Some(mut cs) if cs.len() == 1 => {
@@ -910,7 +910,7 @@ mod tests {
             assert!(make.update);
             assert_eq!(make.name, "labelname");
             let r = make.into_profile();
-            assert_matches!(r, Err(ConfigError::SelfRename(name)) => {
+            assert_matches!(r, Err(ProfileError::Spec(LabelSpecError::SelfRename(name))) => {
                 assert_eq!(name, "labelname");
             });
         }

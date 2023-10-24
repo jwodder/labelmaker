@@ -1,4 +1,4 @@
-use crate::config::{ConfigError, PartialLabelOptions};
+use crate::config::PartialLabelOptions;
 use clap::ValueEnum;
 use csscolorparser::Color;
 use ghrepo::GHRepo;
@@ -317,7 +317,7 @@ impl LabelSpec {
         name: LabelName,
         rename_from: I,
         options: LabelOptions,
-    ) -> Result<LabelSpec, ConfigError>
+    ) -> Result<LabelSpec, LabelSpecError>
     where
         I: IntoIterator<Item = LabelName>,
     {
@@ -325,7 +325,7 @@ impl LabelSpec {
         let mut rename_from2 = Vec::new();
         for n in rename_from {
             if unicase::eq(&name, &n) {
-                return Err(ConfigError::SelfRename(name));
+                return Err(LabelSpecError::SelfRename(name));
             } else if seen.insert(n.to_icase()) {
                 rename_from2.push(n);
             }
@@ -350,6 +350,12 @@ impl LabelSpec {
     pub(crate) fn options(&self) -> &LabelOptions {
         &self.options
     }
+}
+
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+pub(crate) enum LabelSpecError {
+    #[error("label {0:?} cannot be renamed from itself")]
+    SelfRename(LabelName),
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -91,10 +91,11 @@ impl Config {
                 name.clone(),
                 rename_from.iter().cloned(),
                 settings.with_overrides(options),
-            )?;
+            )
+            .map_err(|e| ConfigError::Profile(ProfileError::Spec(e)))?;
             specs.push(sp);
         }
-        Profile::new(name, specs)
+        Profile::new(name, specs).map_err(Into::into)
     }
 
     pub(crate) fn get_default_profile(&self) -> Result<Profile, ConfigError> {
@@ -111,7 +112,7 @@ pub(crate) struct Profile {
 }
 
 impl Profile {
-    pub(crate) fn new<I>(name: &str, specs: I) -> Result<Profile, ConfigError>
+    pub(crate) fn new<I>(name: &str, specs: I) -> Result<Profile, ProfileError>
     where
         I: IntoIterator<Item = LabelSpec>,
     {
@@ -122,10 +123,10 @@ impl Profile {
             let name = sp.name().clone();
             let iname = name.to_icase();
             if !defined_labels.insert(iname.clone()) {
-                return Err(ConfigError::RepeatedLabel(name));
+                return Err(ProfileError::RepeatedLabel(name));
             }
             if let Some(renamer) = renamed_from_to.remove(&iname) {
-                return Err(ConfigError::LabelRenamed {
+                return Err(ProfileError::LabelRenamed {
                     label: name,
                     renamer,
                 });
@@ -134,14 +135,14 @@ impl Profile {
                 let src = n.clone();
                 let isrc = src.to_icase();
                 if defined_labels.contains(&isrc) {
-                    return Err(ConfigError::LabelRenamed {
+                    return Err(ProfileError::LabelRenamed {
                         label: src,
                         renamer: name,
                     });
                 }
                 match renamed_from_to.entry(isrc.clone()) {
                     Entry::Occupied(oc) => {
-                        return Err(ConfigError::RenameConflict {
+                        return Err(ProfileError::RenameConflict {
                             renamed: src,
                             label1: oc.remove(),
                             label2: name,
@@ -229,14 +230,27 @@ pub(crate) enum ConfigError {
         path: PathBuf,
         source: std::io::Error,
     },
-    #[error(transparent)]
-    Parse(#[from] toml::de::Error),
     #[error("profile not found: {0:?}")]
     NoSuchProfile(String),
+    #[error(transparent)]
+    Parse(#[from] toml::de::Error),
+    #[error(transparent)]
+    Profile(#[from] ProfileError),
+    #[error("failed serializing configuration")]
+    Serialize(#[from] toml::ser::Error),
+    #[error("failed to write to {path:#}")]
+    Write {
+        path: patharg::OutputArg,
+        source: std::io::Error,
+    },
+}
+
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+pub(crate) enum ProfileError {
+    #[error(transparent)]
+    Spec(#[from] LabelSpecError),
     #[error("multiple definitions for label {0:?} in profile")]
     RepeatedLabel(LabelName),
-    #[error("label {0:?} cannot be renamed from itself")]
-    SelfRename(LabelName),
     #[error("label {label:?} defined but also would be renamed to {renamer:?}")]
     LabelRenamed {
         label: LabelName,
@@ -247,13 +261,6 @@ pub(crate) enum ConfigError {
         renamed: LabelName,
         label1: LabelName,
         label2: LabelName,
-    },
-    #[error("failed serializing configuration")]
-    Serialize(#[from] toml::ser::Error),
-    #[error("failed to write to {path:#}")]
-    Write {
-        path: patharg::OutputArg,
-        source: std::io::Error,
     },
 }
 
@@ -438,7 +445,7 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let r = cfg.get_default_profile();
-        assert_matches!(r, Err(ConfigError::RepeatedLabel(name)) => {
+        assert_matches!(r, Err(ConfigError::Profile(ProfileError::RepeatedLabel(name))) => {
             assert_eq!(name, "Foo");
         });
     }
@@ -506,7 +513,7 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let r = cfg.get_default_profile();
-        assert_matches!(r, Err(ConfigError::LabelRenamed { label, renamer }) => {
+        assert_matches!(r, Err(ConfigError::Profile(ProfileError::LabelRenamed { label, renamer })) => {
             assert_eq!(label, "BAR");
             assert_eq!(renamer, "foo");
         });
@@ -528,7 +535,7 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let r = cfg.get_default_profile();
-        assert_matches!(r, Err(ConfigError::LabelRenamed { label, renamer }) => {
+        assert_matches!(r, Err(ConfigError::Profile(ProfileError::LabelRenamed { label, renamer })) => {
             assert_eq!(label, "foo");
             assert_eq!(renamer, "BAR");
         });
@@ -551,11 +558,11 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let r = cfg.get_default_profile();
-        assert_matches!(r, Err(ConfigError::RenameConflict {
+        assert_matches!(r, Err(ConfigError::Profile(ProfileError::RenameConflict {
             renamed,
             label1,
             label2,
-        }) => {
+        })) => {
             assert_eq!(renamed, "quux");
             assert_eq!(label1, "foo");
             assert_eq!(label2, "BAR");
@@ -630,7 +637,7 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let r = cfg.get_default_profile();
-        assert_matches!(r, Err(ConfigError::SelfRename(name)) => {
+        assert_matches!(r, Err(ConfigError::Profile(ProfileError::Spec(LabelSpecError::SelfRename(name)))) => {
             assert_eq!(name, "foo");
         });
     }
