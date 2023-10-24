@@ -692,6 +692,7 @@ mod tests {
         fn normal() {
             let name = "foo".parse::<LabelName>().unwrap();
             assert_eq!(name, "foo");
+            assert_ne!(name, "Foo");
             assert_eq!(name.to_string(), "foo");
             assert_eq!(name.as_ref(), "foo");
             assert_eq!(format!("{name:?}"), r#""foo""#);
@@ -1408,7 +1409,7 @@ mod tests {
             let r = labels.resolve(&spec);
             assert_matches!(r, Err(SpecResolveError::MultipleRenameCandidates {ref label, ref candidates}) => {
                 assert_eq!(label, "quux");
-                assert_eq!(candidates, &["foo".parse::<LabelName>().unwrap(), "BAR".parse().unwrap()]);
+                assert_eq!(candidates, &["foo", "BAR"]);
             });
             assert_eq!(
                 r.unwrap_err().to_string(),
@@ -1479,7 +1480,7 @@ mod tests {
             let r = labels.resolve(&spec);
             assert_matches!(r, Err(SpecResolveError::RenameClash {ref label, ref candidates}) => {
                 assert_eq!(label, "foo");
-                assert_eq!(candidates, &["BAR".parse::<LabelName>().unwrap()]);
+                assert_eq!(candidates, &["BAR"]);
             });
             assert_eq!(
                 r.unwrap_err().to_string(),
@@ -1569,7 +1570,7 @@ mod tests {
             let r = labels.resolve(&spec);
             assert_matches!(r, Err(SpecResolveError::RenameClash {ref label, ref candidates}) => {
                 assert_eq!(label, "foo");
-                assert_eq!(candidates, &["BAR".parse::<LabelName>().unwrap()]);
+                assert_eq!(candidates, &["BAR"]);
             });
             assert_eq!(
                 r.unwrap_err().to_string(),
@@ -1655,7 +1656,7 @@ mod tests {
             let r = labels.resolve(&spec);
             assert_matches!(r, Err(SpecResolveError::RenameClash {ref label, ref candidates}) => {
                 assert_eq!(label, "foo");
-                assert_eq!(candidates, &["no-desc".parse::<LabelName>().unwrap(), "BAR".parse().unwrap()]);
+                assert_eq!(candidates, &["no-desc", "BAR"]);
             });
             assert_eq!(
                 r.unwrap_err().to_string(),

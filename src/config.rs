@@ -588,13 +588,7 @@ mod tests {
         assert_eq!(defprofile.name, "default");
         assert_eq!(defprofile.specs.len(), 2);
         assert_eq!(defprofile.specs[0].name(), "foo");
-        assert_eq!(
-            defprofile.specs[0].rename_from(),
-            [
-                "food".parse::<LabelName>().unwrap(),
-                "drink".parse().unwrap()
-            ]
-        );
+        assert_eq!(defprofile.specs[0].rename_from(), ["food", "drink"]);
         assert_eq!(
             defprofile.specs[0].options(),
             &LabelOptions {

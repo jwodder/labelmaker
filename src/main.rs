@@ -714,7 +714,7 @@ mod tests {
             assert!(!make.dry_run);
             assert!(make.enforce_case);
             assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-            assert_eq!(make.rename_from, ["bar".parse::<LabelName>().unwrap()]);
+            assert_eq!(make.rename_from, ["bar"]);
             assert_eq!(make.repository, None);
             assert!(make.update);
             assert_eq!(make.name, "labelname");
@@ -728,10 +728,7 @@ mod tests {
             assert_eq!(profile.name(), "make");
             assert_eq!(profile.specs().len(), 1);
             assert_eq!(profile.specs()[0].name(), "labelname");
-            assert_eq!(
-                profile.specs()[0].rename_from(),
-                ["bar".parse::<LabelName>().unwrap()]
-            );
+            assert_eq!(profile.specs()[0].rename_from(), ["bar"]);
             assert_eq!(
                 profile.specs()[0].options(),
                 &LabelOptions {
@@ -772,14 +769,7 @@ mod tests {
             assert!(!make.dry_run);
             assert!(make.enforce_case);
             assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-            assert_eq!(
-                make.rename_from,
-                [
-                    "bar".parse::<LabelName>().unwrap(),
-                    "baz".parse().unwrap(),
-                    "quux".parse().unwrap()
-                ]
-            );
+            assert_eq!(make.rename_from, ["bar", "baz", "quux"]);
             assert_eq!(make.repository, None);
             assert!(make.update);
             assert_eq!(make.name, "labelname");
@@ -793,14 +783,7 @@ mod tests {
             assert_eq!(profile.name(), "make");
             assert_eq!(profile.specs().len(), 1);
             assert_eq!(profile.specs()[0].name(), "labelname");
-            assert_eq!(
-                profile.specs()[0].rename_from(),
-                [
-                    "bar".parse::<LabelName>().unwrap(),
-                    "baz".parse().unwrap(),
-                    "quux".parse().unwrap()
-                ]
-            );
+            assert_eq!(profile.specs()[0].rename_from(), ["bar", "baz", "quux"]);
             assert_eq!(
                 profile.specs()[0].options(),
                 &LabelOptions {
@@ -841,14 +824,7 @@ mod tests {
             assert!(!make.dry_run);
             assert!(make.enforce_case);
             assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-            assert_eq!(
-                make.rename_from,
-                [
-                    "bar".parse::<LabelName>().unwrap(),
-                    "baz".parse().unwrap(),
-                    "Bar".parse().unwrap(),
-                ]
-            );
+            assert_eq!(make.rename_from, ["bar", "baz", "Bar"]);
             assert_eq!(make.repository, None);
             assert!(make.update);
             assert_eq!(make.name, "labelname");
@@ -862,10 +838,7 @@ mod tests {
             assert_eq!(profile.name(), "make");
             assert_eq!(profile.specs().len(), 1);
             assert_eq!(profile.specs()[0].name(), "labelname");
-            assert_eq!(
-                profile.specs()[0].rename_from(),
-                ["bar".parse::<LabelName>().unwrap(), "baz".parse().unwrap(),]
-            );
+            assert_eq!(profile.specs()[0].rename_from(), ["bar", "baz"]);
             assert_eq!(
                 profile.specs()[0].options(),
                 &LabelOptions {
@@ -902,10 +875,7 @@ mod tests {
             assert!(!make.dry_run);
             assert!(make.enforce_case);
             assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-            assert_eq!(
-                make.rename_from,
-                ["Labelname".parse::<LabelName>().unwrap()]
-            );
+            assert_eq!(make.rename_from, ["Labelname"]);
             assert_eq!(make.repository, None);
             assert!(make.update);
             assert_eq!(make.name, "labelname");
