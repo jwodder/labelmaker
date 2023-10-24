@@ -8,7 +8,7 @@ use crate::labels::*;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
 use anyhow::Context;
-use clap::{Parser, Subcommand};
+use clap::{builder::ArgAction, Args, Parser, Subcommand};
 use csscolorparser::Color;
 use ghrepo::{GHRepo, LocalRepo};
 use log::{Level, LevelFilter};
@@ -95,80 +95,90 @@ enum Command {
         /// repository is used.
         repository: Option<String>,
     },
-    /// Create or update a single label
-    Make {
-        /// The label's color.
-        ///
-        /// Colors can be specified as a hex RGB string "#rrggbb" (with or
-        /// without leading #) or as CSS color names.
-        ///
-        /// This option can be specified multiple times, in which case one of
-        /// the given colors will be picked at random when creating the label,
-        /// and no change will be made to the label color when updating the
-        /// label.
-        ///
-        /// Defaults to a random selection from a built-in list.
-        #[arg(short = 'c', long)]
-        color: Option<Vec<Color>>,
+    Make(Make),
+}
 
-        /// Create the label if it does not already exist [default]
-        #[arg(long, overrides_with = "_no_create")]
-        create: bool,
+/// Create or update a single label
+#[derive(Args, Clone, Debug, PartialEq)]
+// See <https://jwodder.github.io/kbits/posts/clap-bool-negate/> for what's
+// going on with the no-* options
+struct Make {
+    /// The label's color.
+    ///
+    /// Colors can be specified as a hex RGB string "#rrggbb" (with or without
+    /// leading #) or as CSS color names.
+    ///
+    /// This option can be specified multiple times, in which case one of the
+    /// given colors will be picked at random when creating the label, and no
+    /// change will be made to the label color when updating the label.
+    ///
+    /// Defaults to a random selection from a built-in list.
+    #[arg(short = 'c', long)]
+    color: Option<Vec<Color>>,
 
-        /// Do not create the label
-        #[arg(long = "no-create")]
-        _no_create: bool,
+    /// Do not create the label
+    #[arg(long = "no-create", action = ArgAction::SetFalse)]
+    create: bool,
 
-        /// The label's description
-        #[arg(short = 'd', long)]
-        description: Option<Description>,
+    /// Create the label if it does not already exist [default]
+    #[arg(long = "create", overrides_with = "create")]
+    _no_create: bool,
 
-        /// Rename an extant label if its name differs in case from the name
-        /// given on the command line [default]
-        #[arg(long, overrides_with = "_no_enforce_case")]
-        enforce_case: bool,
+    /// The label's description
+    #[arg(short = 'd', long)]
+    description: Option<Description>,
 
-        /// Do not rename an extant label if its name differs in case from the
-        /// name given on the command line
-        #[arg(long = "no-enforce-case")]
-        _no_enforce_case: bool,
+    /// Do not rename an extant label if its name differs in case from the name
+    /// given on the command line
+    #[arg(long = "no-enforce-case", action = ArgAction::SetFalse)]
+    enforce_case: bool,
 
-        /// Specify what to do if the label exists and one or more
-        /// --rename-from labels also exist.
-        #[arg(long, value_enum, default_value_t, value_name = "ignore|warn|error")]
-        on_rename_clash: OnRenameClash,
+    /// Rename an extant label if its name differs in case from the name given
+    /// on the command line [default]
+    #[arg(long = "enforce-case", overrides_with = "enforce_case")]
+    _no_enforce_case: bool,
 
-        /// If the given label exists, rename it to the name given on the
-        /// command line.
-        ///
-        /// This option can be specified multiple times.  If multiple
-        /// --rename-from labels exist, an error will occur.
-        #[arg(long, value_name = "LABEL")]
-        rename_from: Vec<LabelName>,
+    /// Specify what to do if the label exists and one or more --rename-from
+    /// labels also exist.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t,
+        value_name = "ignore|warn|error",
+        ignore_case = true
+    )]
+    on_rename_clash: OnRenameClash,
 
-        /// The GitHub repository to operate on.
-        ///
-        /// The repository can be specified in the form `OWNER/NAME` (or, when
-        /// `OWNER` is the authenticating user, just `NAME`) or as a GitHub
-        /// repository URL.
-        ///
-        /// If not specified, then the GitHub repository for the local Git
-        /// repository is used.
-        #[arg(short = 'R', long)]
-        repository: Option<String>,
+    /// If the given label exists, rename it to the name given on the command
+    /// line.
+    ///
+    /// This option can be specified multiple times.  If multiple --rename-from
+    /// labels exist, an error will occur.
+    #[arg(long, value_name = "LABEL")]
+    rename_from: Vec<LabelName>,
 
-        /// Update the label if its color and/or description do not match the
-        /// values given on the command line [default]
-        #[arg(long, overrides_with = "_no_update")]
-        update: bool,
+    /// The GitHub repository to operate on.
+    ///
+    /// The repository can be specified in the form `OWNER/NAME` (or, when
+    /// `OWNER` is the authenticating user, just `NAME`) or as a GitHub
+    /// repository URL.
+    ///
+    /// If not specified, then the GitHub repository for the local Git
+    /// repository is used.
+    #[arg(short = 'R', long)]
+    repository: Option<String>,
 
-        /// Do not update the label's color or description
-        #[arg(long = "no-update")]
-        _no_update: bool,
+    /// Do not update the label's color or description
+    #[arg(long = "no-update", action = ArgAction::SetFalse)]
+    update: bool,
 
-        /// Name of the label
-        name: LabelName,
-    },
+    /// Update the label if its color and/or description do not match the
+    /// values given on the command line [default]
+    #[arg(long = "update", overrides_with = "update")]
+    _no_update: bool,
+
+    /// Name of the label
+    name: LabelName,
 }
 
 impl Command {
@@ -271,4 +281,220 @@ fn init_logging(log_level: LevelFilter) {
         .chain(stderr)
         .apply()
         .unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn validate_cli() {
+        Arguments::command().debug_assert()
+    }
+
+    mod cli_make {
+        use super::*;
+        use assert_matches::assert_matches;
+        use rstest::rstest;
+
+        #[test]
+        fn no_opts() {
+            let args = Arguments::try_parse_from(["arg0", "make", "labelname"]).unwrap();
+            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
+                assert_eq!(make.color, None);
+                assert!(make.create);
+                assert_eq!(make.description, None);
+                assert!(make.enforce_case);
+                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+                assert!(make.rename_from.is_empty());
+                assert_eq!(make.repository, None);
+                assert!(make.update);
+                assert_eq!(make.name, "labelname");
+            });
+        }
+
+        #[test]
+        fn true_opts() {
+            let args = Arguments::try_parse_from([
+                "arg0",
+                "make",
+                "--create",
+                "--update",
+                "--enforce-case",
+                "labelname",
+            ])
+            .unwrap();
+            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
+                assert_eq!(make.color, None);
+                assert!(make.create);
+                assert_eq!(make.description, None);
+                assert!(make.enforce_case);
+                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+                assert!(make.rename_from.is_empty());
+                assert_eq!(make.repository, None);
+                assert!(make.update);
+                assert_eq!(make.name, "labelname");
+            });
+        }
+
+        #[test]
+        fn false_opts() {
+            let args = Arguments::try_parse_from([
+                "arg0",
+                "make",
+                "--no-create",
+                "--no-update",
+                "--no-enforce-case",
+                "labelname",
+            ])
+            .unwrap();
+            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
+                assert_eq!(make.color, None);
+                assert!(!make.create);
+                assert_eq!(make.description, None);
+                assert!(!make.enforce_case);
+                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+                assert!(make.rename_from.is_empty());
+                assert_eq!(make.repository, None);
+                assert!(!make.update);
+                assert_eq!(make.name, "labelname");
+            });
+        }
+
+        #[test]
+        fn one_color() {
+            let args =
+                Arguments::try_parse_from(["arg0", "make", "-c", "red", "labelname"]).unwrap();
+            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
+                assert_eq!(make.color, Some(vec!["red".parse().unwrap()]));
+                assert!(make.create);
+                assert_eq!(make.description, None);
+                assert!(make.enforce_case);
+                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+                assert!(make.rename_from.is_empty());
+                assert_eq!(make.repository, None);
+                assert!(make.update);
+                assert_eq!(make.name, "labelname");
+            });
+        }
+
+        #[test]
+        fn many_colors() {
+            let args = Arguments::try_parse_from([
+                "arg0",
+                "make",
+                "-c",
+                "red",
+                "--color",
+                "green",
+                "-cblue",
+                "labelname",
+            ])
+            .unwrap();
+            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
+                assert_eq!(make.color, Some(vec!["red".parse().unwrap(), "green".parse().unwrap(), "blue".parse().unwrap()]));
+                assert!(make.create);
+                assert_eq!(make.description, None);
+                assert!(make.enforce_case);
+                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+                assert!(make.rename_from.is_empty());
+                assert_eq!(make.repository, None);
+                assert!(make.update);
+                assert_eq!(make.name, "labelname");
+            });
+        }
+
+        #[rstest]
+        #[case("ignore", OnRenameClash::Ignore)]
+        #[case("warn", OnRenameClash::Warn)]
+        #[case("error", OnRenameClash::Error)]
+        #[case("IGNORE", OnRenameClash::Ignore)]
+        #[case("WARN", OnRenameClash::Warn)]
+        #[case("ERROR", OnRenameClash::Error)]
+        fn on_rename_clash(#[case] arg: &str, #[case] value: OnRenameClash) {
+            let args =
+                Arguments::try_parse_from(["arg0", "make", "--on-rename-clash", arg, "labelname"])
+                    .unwrap();
+            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
+                assert_eq!(make.color, None);
+                assert!(make.create);
+                assert_eq!(make.description, None);
+                assert!(make.enforce_case);
+                assert_eq!(make.on_rename_clash, value);
+                assert!(make.rename_from.is_empty());
+                assert_eq!(make.repository, None);
+                assert!(make.update);
+                assert_eq!(make.name, "labelname");
+            });
+        }
+
+        #[test]
+        fn one_rename_from() {
+            let args =
+                Arguments::try_parse_from(["arg0", "make", "--rename-from", "bar", "labelname"])
+                    .unwrap();
+            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
+                assert_eq!(make.color, None);
+                assert!(make.create);
+                assert_eq!(make.description, None);
+                assert!(make.enforce_case);
+                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+                assert_eq!(make.rename_from, ["bar".parse::<LabelName>().unwrap()]);
+                assert_eq!(make.repository, None);
+                assert!(make.update);
+                assert_eq!(make.name, "labelname");
+            });
+        }
+
+        #[test]
+        fn many_rename_from() {
+            let args = Arguments::try_parse_from([
+                "arg0",
+                "make",
+                "--rename-from",
+                "bar",
+                "--rename-from",
+                "baz",
+                "labelname",
+                "--rename-from",
+                "quux",
+            ])
+            .unwrap();
+            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
+                assert_eq!(make.color, None);
+                assert!(make.create);
+                assert_eq!(make.description, None);
+                assert!(make.enforce_case);
+                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+                assert_eq!(make.rename_from, ["bar".parse::<LabelName>().unwrap(), "baz".parse().unwrap(), "quux".parse().unwrap()]);
+                assert_eq!(make.repository, None);
+                assert!(make.update);
+                assert_eq!(make.name, "labelname");
+            });
+        }
+
+        #[test]
+        fn repository() {
+            let args = Arguments::try_parse_from([
+                "arg0",
+                "make",
+                "-R",
+                "octocat/hello-world",
+                "labelname",
+            ])
+            .unwrap();
+            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
+                assert_eq!(make.color, None);
+                assert!(make.create);
+                assert_eq!(make.description, None);
+                assert!(make.enforce_case);
+                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+                assert!(make.rename_from.is_empty());
+                assert_eq!(make.repository, Some(String::from("octocat/hello-world")));
+                assert!(make.update);
+                assert_eq!(make.name, "labelname");
+            });
+        }
+    }
 }
