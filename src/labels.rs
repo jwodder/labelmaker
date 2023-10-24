@@ -830,6 +830,67 @@ mod tests {
         }
     }
 
+    mod label_spec {
+        use super::*;
+        use assert_matches::assert_matches;
+
+        #[test]
+        fn simple() {
+            let opts = LabelOptions {
+                color: ColorSpec::Fixed("turquoise".parse().unwrap()),
+                description: Some("A label for labelling".parse().unwrap()),
+                ..LabelOptions::default()
+            };
+            let spec = LabelSpec::new(
+                "foo".parse().unwrap(),
+                ["bar".parse().unwrap(), "baz".parse().unwrap()],
+                opts.clone(),
+            )
+            .unwrap();
+            assert_eq!(spec.name(), "foo");
+            assert_eq!(spec.rename_from(), ["bar", "baz"]);
+            assert_eq!(spec.options, opts);
+        }
+
+        #[test]
+        fn duplicate_rename_from() {
+            let opts = LabelOptions {
+                color: ColorSpec::Fixed("turquoise".parse().unwrap()),
+                description: Some("A label for labelling".parse().unwrap()),
+                ..LabelOptions::default()
+            };
+            let spec = LabelSpec::new(
+                "foo".parse().unwrap(),
+                [
+                    "BAR".parse().unwrap(),
+                    "baz".parse().unwrap(),
+                    "Bar".parse().unwrap(),
+                ],
+                opts.clone(),
+            )
+            .unwrap();
+            assert_eq!(spec.name(), "foo");
+            assert_eq!(spec.rename_from(), ["BAR", "baz"]);
+            assert_eq!(spec.options, opts);
+        }
+
+        #[test]
+        fn rename_from_self() {
+            let r = LabelSpec::new(
+                "foo".parse().unwrap(),
+                [
+                    "BAR".parse().unwrap(),
+                    "baz".parse().unwrap(),
+                    "Foo".parse().unwrap(),
+                ],
+                LabelOptions::default(),
+            );
+            assert_matches!(r, Err(LabelSpecError::SelfRename(name)) => {
+                assert_eq!(name, "foo");
+            });
+        }
+    }
+
     mod resolve {
         use super::*;
         use assert_matches::assert_matches;
