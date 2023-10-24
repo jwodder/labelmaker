@@ -4,10 +4,12 @@ mod labels;
 
 use crate::client::{GitHub, Repository};
 use crate::config::Config;
+use crate::labels::*;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
 use anyhow::Context;
 use clap::{Parser, Subcommand};
+use csscolorparser::Color;
 use ghrepo::{GHRepo, LocalRepo};
 use log::{Level, LevelFilter};
 use std::io;
@@ -17,7 +19,7 @@ use std::process::ExitCode;
 /// Create & enforce sets of labels in GitHub repositories
 ///
 /// See <https://github.com/jwodder/labelmaker> for more information
-#[derive(Clone, Debug, Eq, Parser, PartialEq)]
+#[derive(Clone, Debug, Parser, PartialEq)]
 #[clap(version)]
 struct Arguments {
     /// Set logging level
@@ -42,7 +44,7 @@ impl Arguments {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
+#[derive(Clone, Debug, PartialEq, Subcommand)]
 enum Command {
     /// Apply a set of label specifications to GitHub repositories
     Apply {
@@ -92,6 +94,80 @@ enum Command {
         /// If not specified, then the GitHub repository for the local Git
         /// repository is used.
         repository: Option<String>,
+    },
+    /// Create or update a single label
+    Make {
+        /// The label's color.
+        ///
+        /// Colors can be specified as a hex RGB string "#rrggbb" (with or
+        /// without leading #) or as CSS color names.
+        ///
+        /// This option can be specified multiple times, in which case one of
+        /// the given colors will be picked at random when creating the label,
+        /// and no change will be made to the label color when updating the
+        /// label.
+        ///
+        /// Defaults to a random selection from a built-in list.
+        #[clap(short = 'c', long)]
+        color: Option<Vec<Color>>,
+
+        /// Create the label if it does not already exist [default]
+        #[clap(long, overrides_with = "_no_create")]
+        create: bool,
+
+        /// Do not create the label
+        #[clap(long = "no-create")]
+        _no_create: bool,
+
+        /// The label's description
+        #[clap(short = 'd', long)]
+        description: Option<Description>,
+
+        /// Rename an extant label if its name differs in case from the name
+        /// given on the command line [default]
+        #[clap(long, overrides_with = "_no_enforce_case")]
+        enforce_case: bool,
+
+        /// Do not rename an extant label if its name differs in case from the
+        /// name given on the command line
+        #[clap(long = "no-enforce-case")]
+        _no_enforce_case: bool,
+
+        /// Specify what to do if the label exists and one or more
+        /// --rename-from labels also exist.
+        #[clap(long, value_enum, default_value_t, value_name = "ignore|warn|error")]
+        on_rename_clash: OnRenameClash,
+
+        /// If the given label exists, rename it to the name given on the
+        /// command line.
+        ///
+        /// This option can be specified multiple times.  If multiple
+        /// --rename-from labels exist, an error will occur.
+        #[clap(long, value_name = "LABEL")]
+        rename_from: Vec<LabelName>,
+
+        /// The GitHub repository to operate on.
+        ///
+        /// The repository can be specified in the form `OWNER/NAME` (or, when
+        /// `OWNER` is the authenticating user, just `NAME`) or as a GitHub
+        /// repository URL.
+        ///
+        /// If not specified, then the GitHub repository for the local Git
+        /// repository is used.
+        #[clap(short = 'R', long)]
+        repository: Option<String>,
+
+        /// Update the label if its color and/or description do not match the
+        /// values given on the command line [default]
+        #[clap(long, overrides_with = "_no_update")]
+        update: bool,
+
+        /// Do not update the label's color or description
+        #[clap(long = "no-update")]
+        _no_update: bool,
+
+        /// Name of the label
+        name: LabelName,
     },
 }
 
@@ -154,6 +230,7 @@ impl Command {
                 cfg.dump(outfile)
                     .context("failed outputting configuration")?;
             }
+            Command::Make { .. } => todo!(),
         }
         Ok(())
     }

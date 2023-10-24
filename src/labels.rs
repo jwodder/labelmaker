@@ -1,4 +1,5 @@
 use crate::config::PartialLabelOptions;
+use clap::ValueEnum;
 use csscolorparser::Color;
 use ghrepo::GHRepo;
 use itertools::Itertools;
@@ -355,12 +356,15 @@ impl Default for LabelOptions {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum OnRenameClash {
+    /// Do nothing
     Ignore,
+    /// Emit a warning
     #[default]
     Warn,
+    /// Fail with an error
     Error,
 }
 
