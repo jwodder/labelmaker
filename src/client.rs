@@ -338,7 +338,7 @@ struct UpdateLabel {
     new_name: Option<LabelName>,
     #[serde_as(as = "Option<AsHashlessRgb>")]
     color: Option<Color>,
-    description: Option<String>,
+    description: Option<Description>,
 }
 
 #[derive(Debug, Error)]

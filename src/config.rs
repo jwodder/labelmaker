@@ -190,7 +190,7 @@ pub(crate) struct PartialLabelOptions {
     pub(crate) create: Option<bool>,
     pub(crate) update: Option<bool>,
     pub(crate) color: Option<ColorSpec>,
-    pub(crate) description: Option<String>,
+    pub(crate) description: Option<Description>,
     pub(crate) on_rename_clash: Option<OnRenameClash>,
     pub(crate) enforce_case: Option<bool>,
 }
@@ -292,7 +292,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
-                        description: Some(String::from("Foo all the bars")),
+                        description: Some("Foo all the bars".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -304,7 +304,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("blue".parse().unwrap()),
-                        description: Some(String::from("Bar all the foos")),
+                        description: Some("Bar all the foos".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -352,7 +352,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("yellow".parse().unwrap()),
-                        description: Some(String::from("Gnu all the stos")),
+                        description: Some("Gnu all the stos".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -364,7 +364,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("green".parse().unwrap()),
-                        description: Some(String::from("Clee all the shs")),
+                        description: Some("Clee all the shs".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -403,7 +403,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("yellow".parse().unwrap()),
-                        description: Some(String::from("Gnu all the stos")),
+                        description: Some("Gnu all the stos".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -415,7 +415,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("green".parse().unwrap()),
-                        description: Some(String::from("Clee all the shs")),
+                        description: Some("Clee all the shs".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -469,7 +469,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     create: true,
                     update: true,
                     on_rename_clash: OnRenameClash::default(),
@@ -486,7 +486,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("blue".parse().unwrap()),
-                    description: Some(String::from("Bar all the foos")),
+                    description: Some("Bar all the foos".parse().unwrap()),
                     create: true,
                     update: true,
                     on_rename_clash: OnRenameClash::default(),
@@ -593,7 +593,7 @@ mod tests {
                     rename_from: vec!["food".parse().unwrap(), "drink".parse().unwrap()],
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
-                        description: Some(String::from("Foo all the bars")),
+                        description: Some("Foo all the bars".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -605,7 +605,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("blue".parse().unwrap()),
-                        description: Some(String::from("Bar all the foos")),
+                        description: Some("Bar all the foos".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -664,7 +664,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::default(),
-                        description: Some(String::from("Foo all the bars")),
+                        description: Some("Foo all the bars".parse().unwrap()),
                         create: false,
                         update: true,
                         on_rename_clash: OnRenameClash::Warn,
@@ -715,7 +715,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
-                        description: Some(String::from("Foo all the bars")),
+                        description: Some("Foo all the bars".parse().unwrap()),
                         create: false,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -727,7 +727,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("#cccccc".parse().unwrap()),
-                        description: Some(String::from("Bar all the foos")),
+                        description: Some("Bar all the foos".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -766,7 +766,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("red".parse().unwrap()),
-                        description: Some(String::from("Foo all the bars")),
+                        description: Some("Foo all the bars".parse().unwrap()),
                         create: false,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -778,7 +778,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("#cccccc".parse().unwrap()),
-                        description: Some(String::from("Bar all the foos")),
+                        description: Some("Bar all the foos".parse().unwrap()),
                         create: true,
                         update: true,
                         on_rename_clash: OnRenameClash::default(),
@@ -829,7 +829,7 @@ mod tests {
                             "green".parse().unwrap(),
                             "blue".parse().unwrap(),
                         ]),
-                        description: Some(String::from("Foo all the bars")),
+                        description: Some("Foo all the bars".parse().unwrap()),
                         create: false,
                         update: true,
                         on_rename_clash: OnRenameClash::Error,
@@ -841,7 +841,7 @@ mod tests {
                     rename_from: Vec::new(),
                     options: LabelOptions {
                         color: ColorSpec::Fixed("orange".parse().unwrap()),
-                        description: Some(String::from("This is a label.")),
+                        description: Some("This is a label.".parse().unwrap()),
                         create: true,
                         update: false,
                         on_rename_clash: OnRenameClash::Warn,
@@ -890,7 +890,7 @@ mod tests {
                         "yellow".parse().unwrap(),
                         "purple".parse().unwrap(),
                     ]),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     create: true,
                     update: true,
                     on_rename_clash: OnRenameClash::default(),
@@ -911,7 +911,7 @@ mod tests {
                         "green".parse().unwrap(),
                         "blue".parse().unwrap(),
                     ]),
-                    description: Some(String::from("Bar all the foos")),
+                    description: Some("Bar all the foos".parse().unwrap()),
                     create: false,
                     update: false,
                     on_rename_clash: OnRenameClash::default(),
@@ -943,7 +943,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     create: true,
                     update: true,
                     on_rename_clash: OnRenameClash::default(),
@@ -959,12 +959,12 @@ mod tests {
             Label {
                 name: "Foo".parse().unwrap(),
                 color: "red".parse().unwrap(),
-                description: Some(String::from("Foo all the bars")),
+                description: Some("Foo all the bars".parse().unwrap()),
             },
             Label {
                 name: "bar".parse().unwrap(),
                 color: "blue".parse().unwrap(),
-                description: Some(String::from("Bar all the foos")),
+                description: Some("Bar all the foos".parse().unwrap()),
             },
             Label {
                 name: "no-desc".parse().unwrap(),
@@ -974,7 +974,7 @@ mod tests {
             Label {
                 name: "empty-desc".parse().unwrap(),
                 color: "yellow".parse().unwrap(),
-                description: Some(String::new()),
+                description: Some("".parse().unwrap()),
             },
         ];
         let cfg = Config::from_labels(String::from("test"), labels);

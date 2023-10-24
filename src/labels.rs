@@ -12,6 +12,7 @@ use serde_with::{serde_as, DeserializeAs, SerializeAs};
 use smartstring::alias::CompactString;
 use std::collections::HashMap;
 use std::fmt;
+use std::ops::Deref;
 use thiserror::Error; // format()
 
 // These are the "default colors" listed when creating a label via GitHub's web
@@ -134,6 +135,77 @@ impl<'de> Deserialize<'de> for LabelName {
     }
 }
 
+#[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct Description(String);
+
+impl fmt::Debug for Description {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+impl fmt::Display for Description {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl PartialEq<str> for Description {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl<'a> PartialEq<&'a str> for Description {
+    fn eq(&self, other: &&'a str) -> bool {
+        &self.0 == other
+    }
+}
+
+impl std::str::FromStr for Description {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Description, std::convert::Infallible> {
+        // GitHub normalizes descriptions by removing leading & trailing NUL,
+        // TAB, LF, VT, FF, CR, and SP and converting internal LF to SP.
+        let s = s.trim_matches(['\0', '\t', '\n', '\x0B', '\x0C', '\r', ' '].as_slice());
+        Ok(Description(s.replace('\n', " ")))
+    }
+}
+
+impl AsRef<str> for Description {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl Deref for Description {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.0.deref()
+    }
+}
+
+impl Serialize for Description {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_ref())
+    }
+}
+
+impl<'de> Deserialize<'de> for Description {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(s.parse::<Description>().unwrap())
+    }
+}
+
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Label {
@@ -141,7 +213,7 @@ pub(crate) struct Label {
     #[serde_as(as = "AsHashlessRgb")]
     pub(crate) color: Color,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) description: Option<String>,
+    pub(crate) description: Option<Description>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -151,7 +223,7 @@ pub(crate) enum LabelOperation {
         name: LabelName,
         new_name: Option<LabelName>,
         color: Option<Color>,
-        description: Option<String>,
+        description: Option<Description>,
     },
 }
 
@@ -243,7 +315,7 @@ pub(crate) struct LabelSpec {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelOptions {
     pub(crate) color: ColorSpec,
-    pub(crate) description: Option<String>,
+    pub(crate) description: Option<Description>,
     pub(crate) create: bool,
     pub(crate) update: bool,
     pub(crate) on_rename_clash: OnRenameClash,
@@ -399,7 +471,7 @@ impl<R: Rng> LabelSet<R> {
                     }
                 }
                 if let Some(ref desc) = spec.options.description {
-                    if desc != extant.description.as_deref().unwrap_or_default() {
+                    if desc.deref() != extant.description.as_deref().unwrap_or_default() {
                         builder.description(desc);
                     }
                 }
@@ -483,7 +555,7 @@ struct UpdateBuilder<'a> {
     name: &'a LabelName,
     new_name: Option<&'a LabelName>,
     color: Option<&'a Color>,
-    description: Option<&'a str>,
+    description: Option<&'a Description>,
 }
 
 impl<'a> UpdateBuilder<'a> {
@@ -504,7 +576,7 @@ impl<'a> UpdateBuilder<'a> {
         self.color = Some(color);
     }
 
-    fn description(&mut self, desc: &'a str) {
+    fn description(&mut self, desc: &'a Description) {
         self.description = Some(desc);
     }
 
@@ -525,7 +597,7 @@ impl<'a> UpdateBuilder<'a> {
                 name: name.clone(),
                 new_name: new_name.cloned(),
                 color: color.cloned(),
-                description: description.map(String::from),
+                description: description.cloned(),
             })),
         }
     }
@@ -557,96 +629,156 @@ impl<'de> DeserializeAs<'de, Color> for AsHashlessRgb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::rstest;
 
-    #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-    struct NameContainer {
-        name: LabelName,
+    mod label_name {
+        use super::*;
+        use rstest::rstest;
+
+        #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+        struct NameContainer {
+            name: LabelName,
+        }
+
+        #[test]
+        fn normal() {
+            let name = "foo".parse::<LabelName>().unwrap();
+            assert_eq!(name, "foo");
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(name.as_ref(), "foo");
+            assert_eq!(format!("{name:?}"), r#""foo""#);
+            let cntr = NameContainer { name };
+            assert_eq!(serde_json::to_string(&cntr).unwrap(), r#"{"name":"foo"}"#);
+            assert_eq!(
+                serde_json::from_str::<NameContainer>(r#"{"name":"foo"}"#).unwrap(),
+                cntr
+            );
+        }
+
+        #[rstest]
+        #[case(" foo ", "foo")]
+        #[case("foo ", "foo")]
+        #[case(" foo", "foo")]
+        #[case("\t\n\x0B\x0C\r foo", "foo")]
+        #[case("foo\t\n\x0B\x0C\r ", "foo")]
+        #[case("foo\nbar", "foo bar")]
+        #[case("foo \nbar", "foo  bar")]
+        #[case("foo\tbar", "foo\tbar")]
+        #[case("foo \tbar", "foo \tbar")]
+        #[case("\0", "\0")]
+        #[case("\0foo", "\0foo")]
+        fn normalized(#[case] before: &str, #[case] after: &str) {
+            let name = before.parse::<LabelName>().unwrap();
+            assert_eq!(name, after);
+            assert_eq!(name.to_string(), after);
+            assert_eq!(name.as_ref(), after);
+            assert_eq!(format!("{name:?}"), format!("{after:?}"));
+            let cntr = NameContainer { name: name.clone() };
+            let before_json = serde_json::json!({"name": before}).to_string();
+            assert_eq!(
+                serde_json::from_str::<NameContainer>(&before_json).unwrap(),
+                cntr
+            );
+            let after_json = serde_json::json!({"name": after}).to_string();
+            assert_eq!(serde_json::to_string(&cntr).unwrap(), after_json);
+        }
+
+        #[rstest]
+        #[case("")]
+        #[case("\t")]
+        #[case("\n")]
+        #[case("\x0B")]
+        #[case("\x0C")]
+        #[case("\r")]
+        #[case(" ")]
+        #[case("\t\n\x0B\x0C\r ")]
+        fn error(#[case] name: &str) {
+            let r = name.parse::<LabelName>();
+            assert_eq!(r, Err(ParseLabelNameError));
+            let json = serde_json::json!({"name": name}).to_string();
+            assert!(serde_json::from_str::<NameContainer>(&json).is_err());
+        }
     }
 
-    #[test]
-    fn test_normal_label_name() {
-        let name = "foo".parse::<LabelName>().unwrap();
-        assert_eq!(name, "foo");
-        assert_eq!(name.to_string(), "foo");
-        assert_eq!(name.as_ref(), "foo");
-        assert_eq!(format!("{name:?}"), r#""foo""#);
-        let cntr = NameContainer { name };
-        assert_eq!(serde_json::to_string(&cntr).unwrap(), r#"{"name":"foo"}"#);
-        assert_eq!(
-            serde_json::from_str::<NameContainer>(r#"{"name":"foo"}"#).unwrap(),
-            cntr
-        );
+    mod color {
+        use super::*;
+        use rstest::rstest;
+
+        #[serde_as]
+        #[derive(Clone, Debug, PartialEq, Serialize)]
+        struct ColorContainer {
+            #[serde_as(as = "AsHashlessRgb")]
+            color: Color,
+        }
+
+        #[rstest]
+        #[case("black", "000000")]
+        #[case("transparent", "000000")]
+        #[case("#CCCCCC", "cccccc")]
+        #[case("#D90DAD80", "d90dad")]
+        #[case("CCC", "cccccc")]
+        #[case("c0c0c0", "c0c0c0")]
+        fn as_hashless_rgb(#[case] color: Color, #[case] s: &str) {
+            let obj = ColorContainer { color };
+            let expected = format!(r#"{{"color":"{s}"}}"#);
+            assert_eq!(serde_json::to_string(&obj).unwrap(), expected);
+        }
+
+        #[test]
+        fn default_color_spec() {
+            let ColorSpec::Random(colors) = ColorSpec::default() else {
+                panic!("ColorSpec::default() was not Random");
+            };
+            assert_eq!(colors.len(), DEFAULT_COLORS.len());
+        }
     }
 
-    #[rstest]
-    #[case(" foo ", "foo")]
-    #[case("foo ", "foo")]
-    #[case(" foo", "foo")]
-    #[case("\t\n\x0B\x0C\r foo", "foo")]
-    #[case("foo\t\n\x0B\x0C\r ", "foo")]
-    #[case("foo\nbar", "foo bar")]
-    #[case("foo \nbar", "foo  bar")]
-    #[case("foo\tbar", "foo\tbar")]
-    #[case("foo \tbar", "foo \tbar")]
-    fn test_normalized_label_name(#[case] before: &str, #[case] after: &str) {
-        let name = before.parse::<LabelName>().unwrap();
-        assert_eq!(name, after);
-        assert_eq!(name.to_string(), after);
-        assert_eq!(name.as_ref(), after);
-        assert_eq!(format!("{name:?}"), format!("{after:?}"));
-        let cntr = NameContainer { name: name.clone() };
-        let before_json = serde_json::json!({"name": before}).to_string();
-        assert_eq!(
-            serde_json::from_str::<NameContainer>(&before_json).unwrap(),
-            cntr
-        );
-        let after_json = serde_json::json!({"name": after}).to_string();
-        assert_eq!(serde_json::to_string(&cntr).unwrap(), after_json);
-    }
+    mod description {
+        use super::*;
+        use rstest::rstest;
 
-    #[rstest]
-    #[case("")]
-    #[case("\t")]
-    #[case("\n")]
-    #[case("\x0B")]
-    #[case("\x0C")]
-    #[case("\r")]
-    #[case(" ")]
-    #[case("\t\n\x0B\x0C\r ")]
-    fn test_label_name_error(#[case] name: &str) {
-        let r = name.parse::<LabelName>();
-        assert_eq!(r, Err(ParseLabelNameError));
-        let json = serde_json::json!({"name": name}).to_string();
-        assert!(serde_json::from_str::<NameContainer>(&json).is_err());
-    }
+        #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+        struct DescContainer {
+            description: Description,
+        }
 
-    #[serde_as]
-    #[derive(Clone, Debug, PartialEq, Serialize)]
-    struct ColorContainer {
-        #[serde_as(as = "AsHashlessRgb")]
-        color: Color,
-    }
-
-    #[rstest]
-    #[case("black", "000000")]
-    #[case("transparent", "000000")]
-    #[case("#CCCCCC", "cccccc")]
-    #[case("#D90DAD80", "d90dad")]
-    #[case("CCC", "cccccc")]
-    #[case("c0c0c0", "c0c0c0")]
-    fn test_as_hashless_rgb(#[case] color: Color, #[case] s: &str) {
-        let obj = ColorContainer { color };
-        let expected = format!(r#"{{"color":"{s}"}}"#);
-        assert_eq!(serde_json::to_string(&obj).unwrap(), expected);
-    }
-
-    #[test]
-    fn test_default_color_spec() {
-        let ColorSpec::Random(colors) = ColorSpec::default() else {
-            panic!("ColorSpec::default() was not Random");
-        };
-        assert_eq!(colors.len(), DEFAULT_COLORS.len());
+        #[rstest]
+        #[case("foo", "foo")]
+        #[case(" foo ", "foo")]
+        #[case("foo ", "foo")]
+        #[case(" foo", "foo")]
+        #[case("", "")]
+        #[case("\0", "")]
+        #[case("\t", "")]
+        #[case("\n", "")]
+        #[case("\x0B", "")]
+        #[case("\x0C", "")]
+        #[case("\r", "")]
+        #[case(" ", "")]
+        #[case("\0\t\n\x0B\x0C\r ", "")]
+        #[case("\0\t\n\x0B\x0C\r foo", "foo")]
+        #[case("foo\0\t\n\x0B\x0C\r ", "foo")]
+        #[case("foo\nbar", "foo bar")]
+        #[case("foo \nbar", "foo  bar")]
+        #[case("foo\tbar", "foo\tbar")]
+        #[case("foo \tbar", "foo \tbar")]
+        fn test(#[case] before: &str, #[case] after: &str) {
+            let desc = before.parse::<Description>().unwrap();
+            assert_eq!(desc, after);
+            assert_eq!(desc.to_string(), after);
+            assert_eq!(desc.as_ref(), after);
+            assert_eq!(desc.deref(), after);
+            assert_eq!(format!("{desc:?}"), format!("{after:?}"));
+            let cntr = DescContainer {
+                description: desc.clone(),
+            };
+            let before_json = serde_json::json!({"description": before}).to_string();
+            assert_eq!(
+                serde_json::from_str::<DescContainer>(&before_json).unwrap(),
+                cntr
+            );
+            let after_json = serde_json::json!({"description": after}).to_string();
+            assert_eq!(serde_json::to_string(&cntr).unwrap(), after_json);
+        }
     }
 
     mod resolve {
@@ -654,6 +786,7 @@ mod tests {
         use assert_matches::assert_matches;
         use rand::SeedableRng;
         use rand_chacha::ChaCha12Rng;
+        use rstest::rstest;
 
         fn sample_label_set() -> LabelSet<ChaCha12Rng> {
             let mut labels = LabelSet::new(ChaCha12Rng::seed_from_u64(0x0123456789ABCDEF));
@@ -661,12 +794,12 @@ mod tests {
                 Label {
                     name: "foo".parse().unwrap(),
                     color: "red".parse().unwrap(),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                 },
                 Label {
                     name: "BAR".parse().unwrap(),
                     color: "blue".parse().unwrap(),
-                    description: Some(String::from("Bar all the foos")),
+                    description: Some("Bar all the foos".parse().unwrap()),
                 },
                 Label {
                     name: "no-desc".parse().unwrap(),
@@ -676,7 +809,7 @@ mod tests {
                 Label {
                     name: "empty-desc".parse().unwrap(),
                     color: "blue".parse().unwrap(),
-                    description: Some(String::new()),
+                    description: Some("".parse().unwrap()),
                 },
             ]);
             labels
@@ -690,7 +823,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("green".parse().unwrap()),
-                    description: Some(String::from("Quux you")),
+                    description: Some("Quux you".parse().unwrap()),
                     create: true,
                     ..LabelOptions::default()
                 },
@@ -701,7 +834,7 @@ mod tests {
                 [LabelResolution::Operation(LabelOperation::Create(Label {
                     name: "quux".parse().unwrap(),
                     color: "green".parse().unwrap(),
-                    description: Some(String::from("Quux you")),
+                    description: Some("Quux you".parse().unwrap()),
                 }))]
             );
         }
@@ -760,7 +893,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("green".parse().unwrap()),
-                    description: Some(String::from("Quux you")),
+                    description: Some("Quux you".parse().unwrap()),
                     create: false,
                     ..LabelOptions::default()
                 },
@@ -777,7 +910,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     ..LabelOptions::default()
                 },
             };
@@ -793,7 +926,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("purple".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     update: true,
                     ..LabelOptions::default()
                 },
@@ -818,7 +951,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Just what is a \"foo\", anyway?")),
+                    description: Some("Just what is a \"foo\", anyway?".parse().unwrap()),
                     update: true,
                     ..LabelOptions::default()
                 },
@@ -830,7 +963,7 @@ mod tests {
                     name: "foo".parse().unwrap(),
                     new_name: None,
                     color: None,
-                    description: Some(String::from("Just what is a \"foo\", anyway?")),
+                    description: Some("Just what is a \"foo\", anyway?".parse().unwrap()),
                 })]
             );
         }
@@ -860,7 +993,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("silver".parse().unwrap()),
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: true,
                     ..LabelOptions::default()
                 },
@@ -872,7 +1005,7 @@ mod tests {
                     name: "foo".parse().unwrap(),
                     new_name: None,
                     color: Some("silver".parse().unwrap()),
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                 })]
             );
         }
@@ -885,7 +1018,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("silver".parse().unwrap()),
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: false,
                     ..LabelOptions::default()
                 },
@@ -904,7 +1037,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     update,
                     enforce_case: true,
                     ..LabelOptions::default()
@@ -930,7 +1063,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: true,
                     enforce_case: true,
                     ..LabelOptions::default()
@@ -943,7 +1076,7 @@ mod tests {
                     name: "foo".parse().unwrap(),
                     new_name: Some("Foo".parse().unwrap()),
                     color: None,
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                 })]
             );
         }
@@ -956,7 +1089,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: false,
                     enforce_case: true,
                     ..LabelOptions::default()
@@ -982,7 +1115,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: true,
                     enforce_case: false,
                     ..LabelOptions::default()
@@ -995,7 +1128,7 @@ mod tests {
                     name: "foo".parse().unwrap(),
                     new_name: None,
                     color: None,
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                 })]
             );
         }
@@ -1010,7 +1143,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     update,
                     enforce_case: false,
                     ..LabelOptions::default()
@@ -1028,7 +1161,7 @@ mod tests {
                 rename_from: Vec::new(),
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: true,
                     enforce_case: false,
                     ..LabelOptions::default()
@@ -1041,7 +1174,7 @@ mod tests {
                     name: "foo".parse().unwrap(),
                     new_name: None,
                     color: None,
-                    description: Some(String::from("What is a foo without its bar?")),
+                    description: Some("What is a foo without its bar?".parse().unwrap()),
                 })]
             );
         }
@@ -1056,7 +1189,7 @@ mod tests {
                 rename_from: vec!["foo".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     create,
                     ..LabelOptions::default()
                 },
@@ -1081,7 +1214,7 @@ mod tests {
                 rename_from: vec!["foo".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("magenta".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     update: true,
                     ..LabelOptions::default()
                 },
@@ -1106,7 +1239,7 @@ mod tests {
                 rename_from: vec!["foo".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("magenta".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     update: false,
                     ..LabelOptions::default()
                 },
@@ -1133,7 +1266,7 @@ mod tests {
                 rename_from: vec!["FOO".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     enforce_case,
                     ..LabelOptions::default()
                 },
@@ -1181,7 +1314,7 @@ mod tests {
                 rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Ignore,
                     ..LabelOptions::default()
                 },
@@ -1198,7 +1331,7 @@ mod tests {
                 rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Warn,
                     ..LabelOptions::default()
                 },
@@ -1228,7 +1361,7 @@ mod tests {
                 rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Error,
                     ..LabelOptions::default()
                 },
@@ -1252,7 +1385,7 @@ mod tests {
                 rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Ignore,
                     enforce_case: true,
                     ..LabelOptions::default()
@@ -1278,7 +1411,7 @@ mod tests {
                 rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Warn,
                     enforce_case: true,
                     ..LabelOptions::default()
@@ -1317,7 +1450,7 @@ mod tests {
                 rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Error,
                     enforce_case: true,
                     ..LabelOptions::default()
@@ -1334,7 +1467,7 @@ mod tests {
             );
         }
 
-        #[rstest]
+        #[test]
         fn multiple_rename_clash_ignore() {
             let mut labels = sample_label_set();
             let spec = LabelSpec {
@@ -1346,7 +1479,7 @@ mod tests {
                 ],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Ignore,
                     ..LabelOptions::default()
                 },
@@ -1367,7 +1500,7 @@ mod tests {
                 ],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Warn,
                     ..LabelOptions::default()
                 },
@@ -1404,7 +1537,7 @@ mod tests {
                 ],
                 options: LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
-                    description: Some(String::from("Foo all the bars")),
+                    description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Error,
                     ..LabelOptions::default()
                 },
@@ -1427,7 +1560,7 @@ mod tests {
                 name: "no-desc".parse().unwrap(),
                 rename_from: Vec::new(),
                 options: LabelOptions {
-                    description: Some(String::new()),
+                    description: Some("".parse().unwrap()),
                     ..LabelOptions::default()
                 },
             };
@@ -1472,115 +1605,119 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_log_message_create() {
-        let op = LabelOperation::Create(Label {
-            name: "foo".parse().unwrap(),
-            color: "red".parse().unwrap(),
-            description: Some(String::from("Foo all the bars")),
-        });
-        let repo = GHRepo::new("octocat", "repo").unwrap();
-        assert_eq!(
-            op.as_log_message(&repo, false).to_string(),
-            r#"Creating label "foo" in octocat/repo (color: "ff0000", description: "Foo all the bars")"#
-        );
-        assert_eq!(
-            op.as_log_message(&repo, true).to_string(),
-            r#"Would create label "foo" in octocat/repo (color: "ff0000", description: "Foo all the bars")"#
-        );
-    }
+    mod as_log_message {
+        use super::*;
 
-    #[test]
-    fn test_log_message_create_none_description() {
-        let op = LabelOperation::Create(Label {
-            name: "foo".parse().unwrap(),
-            color: "red".parse().unwrap(),
-            description: None,
-        });
-        let repo = GHRepo::new("octocat", "repo").unwrap();
-        assert_eq!(
-            op.as_log_message(&repo, false).to_string(),
-            r#"Creating label "foo" in octocat/repo (color: "ff0000", description: "")"#
-        );
-        assert_eq!(
-            op.as_log_message(&repo, true).to_string(),
-            r#"Would create label "foo" in octocat/repo (color: "ff0000", description: "")"#
-        );
-    }
+        #[test]
+        fn create() {
+            let op = LabelOperation::Create(Label {
+                name: "foo".parse().unwrap(),
+                color: "red".parse().unwrap(),
+                description: Some("Foo all the bars".parse().unwrap()),
+            });
+            let repo = GHRepo::new("octocat", "repo").unwrap();
+            assert_eq!(
+                op.as_log_message(&repo, false).to_string(),
+                r#"Creating label "foo" in octocat/repo (color: "ff0000", description: "Foo all the bars")"#
+            );
+            assert_eq!(
+                op.as_log_message(&repo, true).to_string(),
+                r#"Would create label "foo" in octocat/repo (color: "ff0000", description: "Foo all the bars")"#
+            );
+        }
 
-    #[test]
-    fn test_log_message_update_name() {
-        let op = LabelOperation::Update {
-            name: "foo".parse().unwrap(),
-            new_name: Some("bar".parse().unwrap()),
-            color: None,
-            description: None,
-        };
-        let repo = GHRepo::new("octocat", "repo").unwrap();
-        assert_eq!(
-            op.as_log_message(&repo, false).to_string(),
-            r#"Updating label "foo" in octocat/repo (new name: "bar")"#
-        );
-        assert_eq!(
-            op.as_log_message(&repo, true).to_string(),
-            r#"Would update label "foo" in octocat/repo (new name: "bar")"#
-        );
-    }
+        #[test]
+        fn create_none_description() {
+            let op = LabelOperation::Create(Label {
+                name: "foo".parse().unwrap(),
+                color: "red".parse().unwrap(),
+                description: None,
+            });
+            let repo = GHRepo::new("octocat", "repo").unwrap();
+            assert_eq!(
+                op.as_log_message(&repo, false).to_string(),
+                r#"Creating label "foo" in octocat/repo (color: "ff0000", description: "")"#
+            );
+            assert_eq!(
+                op.as_log_message(&repo, true).to_string(),
+                r#"Would create label "foo" in octocat/repo (color: "ff0000", description: "")"#
+            );
+        }
 
-    #[test]
-    fn test_log_message_update_color() {
-        let op = LabelOperation::Update {
-            name: "foo".parse().unwrap(),
-            new_name: None,
-            color: Some("blue".parse().unwrap()),
-            description: None,
-        };
-        let repo = GHRepo::new("octocat", "repo").unwrap();
-        assert_eq!(
-            op.as_log_message(&repo, false).to_string(),
-            r#"Updating label "foo" in octocat/repo (new color: "0000ff")"#
-        );
-        assert_eq!(
-            op.as_log_message(&repo, true).to_string(),
-            r#"Would update label "foo" in octocat/repo (new color: "0000ff")"#
-        );
-    }
+        #[test]
+        fn update_name() {
+            let op = LabelOperation::Update {
+                name: "foo".parse().unwrap(),
+                new_name: Some("bar".parse().unwrap()),
+                color: None,
+                description: None,
+            };
+            let repo = GHRepo::new("octocat", "repo").unwrap();
+            assert_eq!(
+                op.as_log_message(&repo, false).to_string(),
+                r#"Updating label "foo" in octocat/repo (new name: "bar")"#
+            );
+            assert_eq!(
+                op.as_log_message(&repo, true).to_string(),
+                r#"Would update label "foo" in octocat/repo (new name: "bar")"#
+            );
+        }
 
-    #[test]
-    fn test_log_message_update_description() {
-        let op = LabelOperation::Update {
-            name: "foo".parse().unwrap(),
-            new_name: None,
-            color: None,
-            description: Some(String::from("What is a foo without its bar?")),
-        };
-        let repo = GHRepo::new("octocat", "repo").unwrap();
-        assert_eq!(
-            op.as_log_message(&repo, false).to_string(),
-            r#"Updating label "foo" in octocat/repo (new description: "What is a foo without its bar?")"#
-        );
-        assert_eq!(
-            op.as_log_message(&repo, true).to_string(),
-            r#"Would update label "foo" in octocat/repo (new description: "What is a foo without its bar?")"#
-        );
-    }
+        #[test]
+        fn update_color() {
+            let op = LabelOperation::Update {
+                name: "foo".parse().unwrap(),
+                new_name: None,
+                color: Some("blue".parse().unwrap()),
+                description: None,
+            };
+            let repo = GHRepo::new("octocat", "repo").unwrap();
+            assert_eq!(
+                op.as_log_message(&repo, false).to_string(),
+                r#"Updating label "foo" in octocat/repo (new color: "0000ff")"#
+            );
+            assert_eq!(
+                op.as_log_message(&repo, true).to_string(),
+                r#"Would update label "foo" in octocat/repo (new color: "0000ff")"#
+            );
+        }
 
-    #[test]
-    fn test_log_message_update_all() {
-        let op = LabelOperation::Update {
-            name: "foo".parse().unwrap(),
-            new_name: Some("bar".parse().unwrap()),
-            color: Some("blue".parse().unwrap()),
-            description: Some(String::from("What is a foo without its bar?")),
-        };
-        let repo = GHRepo::new("octocat", "repo").unwrap();
-        assert_eq!(
-            op.as_log_message(&repo, false).to_string(),
-            r#"Updating label "foo" in octocat/repo (new name: "bar", new color: "0000ff", new description: "What is a foo without its bar?")"#
-        );
-        assert_eq!(
-            op.as_log_message(&repo, true).to_string(),
-            r#"Would update label "foo" in octocat/repo (new name: "bar", new color: "0000ff", new description: "What is a foo without its bar?")"#
-        );
+        #[test]
+        fn update_description() {
+            let op = LabelOperation::Update {
+                name: "foo".parse().unwrap(),
+                new_name: None,
+                color: None,
+                description: Some("What is a foo without its bar?".parse().unwrap()),
+            };
+            let repo = GHRepo::new("octocat", "repo").unwrap();
+            assert_eq!(
+                op.as_log_message(&repo, false).to_string(),
+                r#"Updating label "foo" in octocat/repo (new description: "What is a foo without its bar?")"#
+            );
+            assert_eq!(
+                op.as_log_message(&repo, true).to_string(),
+                r#"Would update label "foo" in octocat/repo (new description: "What is a foo without its bar?")"#
+            );
+        }
+
+        #[test]
+        fn message_update_all() {
+            let op = LabelOperation::Update {
+                name: "foo".parse().unwrap(),
+                new_name: Some("bar".parse().unwrap()),
+                color: Some("blue".parse().unwrap()),
+                description: Some("What is a foo without its bar?".parse().unwrap()),
+            };
+            let repo = GHRepo::new("octocat", "repo").unwrap();
+            assert_eq!(
+                op.as_log_message(&repo, false).to_string(),
+                r#"Updating label "foo" in octocat/repo (new name: "bar", new color: "0000ff", new description: "What is a foo without its bar?")"#
+            );
+            assert_eq!(
+                op.as_log_message(&repo, true).to_string(),
+                r#"Would update label "foo" in octocat/repo (new name: "bar", new color: "0000ff", new description: "What is a foo without its bar?")"#
+            );
+        }
     }
 }
