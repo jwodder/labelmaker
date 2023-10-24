@@ -1,5 +1,5 @@
-v0.3.0 (in development)
------------------------
+v0.3.0 (2023-10-24)
+-------------------
 - Properly normalize whitespace in label names
 - Properly normalize whitespace in descriptions
 - Added a `make` subcommand for creating & updating individual labels
