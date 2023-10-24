@@ -169,13 +169,13 @@ struct Make {
     #[arg(short = 'c', long)]
     color: Option<Vec<Color>>,
 
-    /// Do not create the label
-    #[arg(long = "no-create", action = ArgAction::SetFalse)]
-    create: bool,
-
     /// Create the label if it does not already exist [default]
     #[arg(long = "create", overrides_with = "create")]
     _no_create: bool,
+
+    /// Do not create the label
+    #[arg(long = "no-create", action = ArgAction::SetFalse)]
+    create: bool,
 
     /// The label's description
     #[arg(short = 'd', long)]
@@ -186,15 +186,15 @@ struct Make {
     #[arg(long)]
     dry_run: bool,
 
-    /// Do not rename an extant label if its name differs in case from the name
-    /// given on the command line
-    #[arg(long = "no-enforce-case", action = ArgAction::SetFalse)]
-    enforce_case: bool,
-
     /// Rename an extant label if its name differs in case from the name given
     /// on the command line [default]
     #[arg(long = "enforce-case", overrides_with = "enforce_case")]
     _no_enforce_case: bool,
+
+    /// Do not rename an extant label if its name differs in case from the name
+    /// given on the command line
+    #[arg(long = "no-enforce-case", action = ArgAction::SetFalse)]
+    enforce_case: bool,
 
     /// Specify what to do if the label exists and one or more --rename-from
     /// labels also exist.
@@ -226,14 +226,14 @@ struct Make {
     #[arg(short = 'R', long)]
     repository: Option<String>,
 
-    /// Do not update the label's color or description
-    #[arg(long = "no-update", action = ArgAction::SetFalse)]
-    update: bool,
-
     /// Update the label if its color and/or description do not match the
     /// values given on the command line [default]
     #[arg(long = "update", overrides_with = "update")]
     _no_update: bool,
+
+    /// Do not update the label's color or description
+    #[arg(long = "no-update", action = ArgAction::SetFalse)]
+    update: bool,
 
     /// Name of the label
     name: LabelName,
