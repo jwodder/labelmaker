@@ -74,6 +74,8 @@ impl std::str::FromStr for LabelName {
     type Err = ParseLabelNameError;
 
     fn from_str(s: &str) -> Result<LabelName, ParseLabelNameError> {
+        // GitHub normalizes label names by removing leading & trailing TAB,
+        // LF, VT, FF, CR, and SP and converting internal LF to SP.
         let s = s.trim_matches(['\t', '\n', '\x0B', '\x0C', '\r', ' '].as_slice());
         if s.is_empty() {
             Err(ParseLabelNameError)
