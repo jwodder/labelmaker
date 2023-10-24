@@ -112,20 +112,15 @@ impl Command {
                     Some(p) => cfg.get_profile(&p)?,
                     None => cfg.get_default_profile()?,
                 };
-                let me = client
-                    .whoami()
-                    .await
-                    .context("unable to determine authenticating user's login name")?;
+                let mut repo_parser = RepoParser::new(&client);
                 let repos = if repository.is_empty() {
-                    let r = LocalRepo::for_cwd()?.github_remote("origin").context(
-                        "unable to determine remote GitHub repository for local Git repository",
-                    )?;
-                    vec![r]
+                    vec![repo_parser.default()?]
                 } else {
-                    repository
-                        .into_iter()
-                        .map(|s| GHRepo::from_str_with_owner(&s, &me))
-                        .collect::<Result<Vec<_>, _>>()?
+                    let mut repos = Vec::with_capacity(repository.len());
+                    for s in repository {
+                        repos.push(repo_parser.parse(&s).await?);
+                    }
+                    repos
                 };
                 let mut rng = rand::thread_rng();
                 for r in repos {
@@ -139,17 +134,10 @@ impl Command {
                 profile,
                 repository,
             } => {
+                let mut repo_parser = RepoParser::new(&client);
                 let repo = match repository {
-                    Some(s) => {
-                        let me = client
-                            .whoami()
-                            .await
-                            .context("unable to determine authenticating user's login name")?;
-                        GHRepo::from_str_with_owner(&s, &me)?
-                    }
-                    None => LocalRepo::for_cwd()?.github_remote("origin").context(
-                        "unable to determine remote GitHub repository for local Git repository",
-                    )?,
+                    Some(s) => repo_parser.parse(&s).await?,
+                    None => repo_parser.default()?,
                 };
                 log::debug!("Fetching current labels for {repo} ...");
                 let labels = Repository::new(&client, repo).get_labels().await?;
@@ -258,15 +246,10 @@ impl Make {
             dry_run,
             profile,
         } = self.into_profile()?;
-        let me = client
-            .whoami()
-            .await
-            .context("unable to determine authenticating user's login name")?;
+        let mut repo_parser = RepoParser::new(&client);
         let repo = match repository {
-            Some(s) => GHRepo::from_str_with_owner(&s, &me)?,
-            None => LocalRepo::for_cwd()?
-                .github_remote("origin")
-                .context("unable to determine remote GitHub repository for local Git repository")?,
+            Some(s) => repo_parser.parse(&s).await?,
+            None => repo_parser.default()?,
         };
         client
             .get_label_maker(repo, rand::thread_rng(), dry_run)
@@ -286,6 +269,47 @@ struct MakeProfile {
     repository: Option<String>,
     dry_run: bool,
     profile: Profile,
+}
+
+#[derive(Clone, Debug)]
+struct RepoParser<'a> {
+    client: &'a GitHub,
+    whoami: Option<String>,
+}
+
+impl<'a> RepoParser<'a> {
+    fn new(client: &'a GitHub) -> RepoParser<'a> {
+        RepoParser {
+            client,
+            whoami: None,
+        }
+    }
+
+    async fn whoami(&mut self) -> anyhow::Result<&str> {
+        if self.whoami.is_none() {
+            self.whoami = Some(
+                self.client
+                    .whoami()
+                    .await
+                    .context("unable to determine authenticating user's login name")?,
+            );
+        }
+        Ok(self.whoami.as_deref().expect("whoami should be Some now"))
+    }
+
+    async fn parse(&mut self, s: &str) -> anyhow::Result<GHRepo> {
+        if GHRepo::is_valid_name(s) {
+            GHRepo::new(self.whoami().await?, s).map_err(Into::into)
+        } else {
+            s.parse().map_err(Into::into)
+        }
+    }
+
+    fn default(&self) -> anyhow::Result<GHRepo> {
+        LocalRepo::for_cwd()?
+            .github_remote("origin")
+            .context("unable to determine remote GitHub repository for local Git repository")
+    }
 }
 
 #[tokio::main(flavor = "current_thread")]
