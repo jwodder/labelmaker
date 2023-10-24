@@ -20,10 +20,10 @@ use std::process::ExitCode;
 ///
 /// See <https://github.com/jwodder/labelmaker> for more information
 #[derive(Clone, Debug, Parser, PartialEq)]
-#[clap(version)]
+#[command(version)]
 struct Arguments {
     /// Set logging level
-    #[clap(
+    #[arg(
         short,
         long,
         default_value = "INFO",
@@ -78,7 +78,7 @@ enum Command {
         /// File to output the configuration to.
         ///
         /// Defaults to standard output.
-        #[clap(short, long, default_value_t, hide_default_value = true)]
+        #[arg(short, long, default_value_t, hide_default_value = true)]
         outfile: patharg::OutputArg,
 
         /// Name of the profile to define in the generated configuration file
@@ -108,34 +108,34 @@ enum Command {
         /// label.
         ///
         /// Defaults to a random selection from a built-in list.
-        #[clap(short = 'c', long)]
+        #[arg(short = 'c', long)]
         color: Option<Vec<Color>>,
 
         /// Create the label if it does not already exist [default]
-        #[clap(long, overrides_with = "_no_create")]
+        #[arg(long, overrides_with = "_no_create")]
         create: bool,
 
         /// Do not create the label
-        #[clap(long = "no-create")]
+        #[arg(long = "no-create")]
         _no_create: bool,
 
         /// The label's description
-        #[clap(short = 'd', long)]
+        #[arg(short = 'd', long)]
         description: Option<Description>,
 
         /// Rename an extant label if its name differs in case from the name
         /// given on the command line [default]
-        #[clap(long, overrides_with = "_no_enforce_case")]
+        #[arg(long, overrides_with = "_no_enforce_case")]
         enforce_case: bool,
 
         /// Do not rename an extant label if its name differs in case from the
         /// name given on the command line
-        #[clap(long = "no-enforce-case")]
+        #[arg(long = "no-enforce-case")]
         _no_enforce_case: bool,
 
         /// Specify what to do if the label exists and one or more
         /// --rename-from labels also exist.
-        #[clap(long, value_enum, default_value_t, value_name = "ignore|warn|error")]
+        #[arg(long, value_enum, default_value_t, value_name = "ignore|warn|error")]
         on_rename_clash: OnRenameClash,
 
         /// If the given label exists, rename it to the name given on the
@@ -143,7 +143,7 @@ enum Command {
         ///
         /// This option can be specified multiple times.  If multiple
         /// --rename-from labels exist, an error will occur.
-        #[clap(long, value_name = "LABEL")]
+        #[arg(long, value_name = "LABEL")]
         rename_from: Vec<LabelName>,
 
         /// The GitHub repository to operate on.
@@ -154,16 +154,16 @@ enum Command {
         ///
         /// If not specified, then the GitHub repository for the local Git
         /// repository is used.
-        #[clap(short = 'R', long)]
+        #[arg(short = 'R', long)]
         repository: Option<String>,
 
         /// Update the label if its color and/or description do not match the
         /// values given on the command line [default]
-        #[clap(long, overrides_with = "_no_update")]
+        #[arg(long, overrides_with = "_no_update")]
         update: bool,
 
         /// Do not update the label's color or description
-        #[clap(long = "no-update")]
+        #[arg(long = "no-update")]
         _no_update: bool,
 
         /// Name of the label
