@@ -3,7 +3,7 @@ mod config;
 mod labels;
 
 use crate::client::{GitHub, Repository};
-use crate::config::{Config, Profile};
+use crate::config::{Config, ConfigError, Profile};
 use crate::labels::*;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
@@ -259,8 +259,29 @@ impl Make {
         Ok(())
     }
 
-    fn into_profile(self) -> anyhow::Result<MakeProfile> {
-        todo!()
+    fn into_profile(self) -> Result<MakeProfile, ConfigError> {
+        let color = match self.color {
+            None => ColorSpec::default(),
+            Some(mut cs) if cs.len() == 1 => {
+                ColorSpec::Fixed(cs.pop().expect("Vec of length 1 should pop a value"))
+            }
+            Some(cs) => ColorSpec::Random(cs),
+        };
+        let options = LabelOptions {
+            color,
+            description: self.description,
+            create: self.create,
+            update: self.update,
+            on_rename_clash: self.on_rename_clash,
+            enforce_case: self.enforce_case,
+        };
+        let spec = LabelSpec::new(self.name, self.rename_from, options)?;
+        let profile = Profile::new("make", [spec])?;
+        Ok(MakeProfile {
+            repository: self.repository,
+            dry_run: self.dry_run,
+            profile,
+        })
     }
 }
 
@@ -367,18 +388,45 @@ mod tests {
         #[test]
         fn no_opts() {
             let args = Arguments::try_parse_from(["arg0", "make", "labelname"]).unwrap();
-            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
-                assert_eq!(make.color, None);
-                assert!(make.create);
-                assert_eq!(make.description, None);
-                assert!(!make.dry_run);
-                assert!(make.enforce_case);
-                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-                assert!(make.rename_from.is_empty());
-                assert_eq!(make.repository, None);
-                assert!(make.update);
-                assert_eq!(make.name, "labelname");
-            });
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, None);
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert!(make.rename_from.is_empty());
+            assert_eq!(make.repository, None);
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, None);
+            assert!(!dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert!(profile.specs()[0].rename_from().is_empty());
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::default(),
+                    description: None,
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::Warn,
+                    enforce_case: true,
+                }
+            );
         }
 
         #[test]
@@ -393,18 +441,45 @@ mod tests {
                 "--dry-run",
             ])
             .unwrap();
-            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
-                assert_eq!(make.color, None);
-                assert!(make.create);
-                assert_eq!(make.description, None);
-                assert!(make.dry_run);
-                assert!(make.enforce_case);
-                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-                assert!(make.rename_from.is_empty());
-                assert_eq!(make.repository, None);
-                assert!(make.update);
-                assert_eq!(make.name, "labelname");
-            });
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, None);
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert!(make.rename_from.is_empty());
+            assert_eq!(make.repository, None);
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, None);
+            assert!(dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert!(profile.specs()[0].rename_from().is_empty());
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::default(),
+                    description: None,
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::Warn,
+                    enforce_case: true,
+                }
+            );
         }
 
         #[test]
@@ -418,36 +493,90 @@ mod tests {
                 "labelname",
             ])
             .unwrap();
-            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
-                assert_eq!(make.color, None);
-                assert!(!make.create);
-                assert_eq!(make.description, None);
-                assert!(!make.dry_run);
-                assert!(!make.enforce_case);
-                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-                assert!(make.rename_from.is_empty());
-                assert_eq!(make.repository, None);
-                assert!(!make.update);
-                assert_eq!(make.name, "labelname");
-            });
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, None);
+            assert!(!make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(!make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert!(make.rename_from.is_empty());
+            assert_eq!(make.repository, None);
+            assert!(!make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, None);
+            assert!(!dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert!(profile.specs()[0].rename_from().is_empty());
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::default(),
+                    description: None,
+                    create: false,
+                    update: false,
+                    on_rename_clash: OnRenameClash::Warn,
+                    enforce_case: false,
+                }
+            );
         }
 
         #[test]
         fn one_color() {
             let args =
                 Arguments::try_parse_from(["arg0", "make", "-c", "red", "labelname"]).unwrap();
-            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
-                assert_eq!(make.color, Some(vec!["red".parse().unwrap()]));
-                assert!(make.create);
-                assert_eq!(make.description, None);
-                assert!(!make.dry_run);
-                assert!(make.enforce_case);
-                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-                assert!(make.rename_from.is_empty());
-                assert_eq!(make.repository, None);
-                assert!(make.update);
-                assert_eq!(make.name, "labelname");
-            });
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, Some(vec!["red".parse().unwrap()]));
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert!(make.rename_from.is_empty());
+            assert_eq!(make.repository, None);
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, None);
+            assert!(!dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert!(profile.specs()[0].rename_from().is_empty());
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::Fixed("red".parse().unwrap()),
+                    description: None,
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::Warn,
+                    enforce_case: true,
+                }
+            );
         }
 
         #[test]
@@ -463,18 +592,56 @@ mod tests {
                 "labelname",
             ])
             .unwrap();
-            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
-                assert_eq!(make.color, Some(vec!["red".parse().unwrap(), "green".parse().unwrap(), "blue".parse().unwrap()]));
-                assert!(make.create);
-                assert_eq!(make.description, None);
-                assert!(!make.dry_run);
-                assert!(make.enforce_case);
-                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-                assert!(make.rename_from.is_empty());
-                assert_eq!(make.repository, None);
-                assert!(make.update);
-                assert_eq!(make.name, "labelname");
-            });
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(
+                make.color,
+                Some(vec![
+                    "red".parse().unwrap(),
+                    "green".parse().unwrap(),
+                    "blue".parse().unwrap()
+                ])
+            );
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert!(make.rename_from.is_empty());
+            assert_eq!(make.repository, None);
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, None);
+            assert!(!dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert!(profile.specs()[0].rename_from().is_empty());
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::Random(vec![
+                        "red".parse().unwrap(),
+                        "green".parse().unwrap(),
+                        "blue".parse().unwrap()
+                    ]),
+                    description: None,
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::Warn,
+                    enforce_case: true,
+                }
+            );
         }
 
         #[rstest]
@@ -488,18 +655,45 @@ mod tests {
             let args =
                 Arguments::try_parse_from(["arg0", "make", "--on-rename-clash", arg, "labelname"])
                     .unwrap();
-            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
-                assert_eq!(make.color, None);
-                assert!(make.create);
-                assert_eq!(make.description, None);
-                assert!(!make.dry_run);
-                assert!(make.enforce_case);
-                assert_eq!(make.on_rename_clash, value);
-                assert!(make.rename_from.is_empty());
-                assert_eq!(make.repository, None);
-                assert!(make.update);
-                assert_eq!(make.name, "labelname");
-            });
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, None);
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, value);
+            assert!(make.rename_from.is_empty());
+            assert_eq!(make.repository, None);
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, None);
+            assert!(!dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert!(profile.specs()[0].rename_from().is_empty());
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::default(),
+                    description: None,
+                    create: true,
+                    update: true,
+                    on_rename_clash: value,
+                    enforce_case: true,
+                }
+            );
         }
 
         #[test]
@@ -507,18 +701,48 @@ mod tests {
             let args =
                 Arguments::try_parse_from(["arg0", "make", "--rename-from", "bar", "labelname"])
                     .unwrap();
-            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
-                assert_eq!(make.color, None);
-                assert!(make.create);
-                assert_eq!(make.description, None);
-                assert!(!make.dry_run);
-                assert!(make.enforce_case);
-                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-                assert_eq!(make.rename_from, ["bar".parse::<LabelName>().unwrap()]);
-                assert_eq!(make.repository, None);
-                assert!(make.update);
-                assert_eq!(make.name, "labelname");
-            });
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, None);
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert_eq!(make.rename_from, ["bar".parse::<LabelName>().unwrap()]);
+            assert_eq!(make.repository, None);
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, None);
+            assert!(!dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert_eq!(
+                profile.specs()[0].rename_from(),
+                ["bar".parse::<LabelName>().unwrap()]
+            );
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::default(),
+                    description: None,
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::Warn,
+                    enforce_case: true,
+                }
+            );
         }
 
         #[test]
@@ -535,17 +759,159 @@ mod tests {
                 "quux",
             ])
             .unwrap();
-            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
-                assert_eq!(make.color, None);
-                assert!(make.create);
-                assert_eq!(make.description, None);
-                assert!(!make.dry_run);
-                assert!(make.enforce_case);
-                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-                assert_eq!(make.rename_from, ["bar".parse::<LabelName>().unwrap(), "baz".parse().unwrap(), "quux".parse().unwrap()]);
-                assert_eq!(make.repository, None);
-                assert!(make.update);
-                assert_eq!(make.name, "labelname");
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, None);
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert_eq!(
+                make.rename_from,
+                [
+                    "bar".parse::<LabelName>().unwrap(),
+                    "baz".parse().unwrap(),
+                    "quux".parse().unwrap()
+                ]
+            );
+            assert_eq!(make.repository, None);
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, None);
+            assert!(!dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert_eq!(
+                profile.specs()[0].rename_from(),
+                [
+                    "bar".parse::<LabelName>().unwrap(),
+                    "baz".parse().unwrap(),
+                    "quux".parse().unwrap()
+                ]
+            );
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::default(),
+                    description: None,
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::Warn,
+                    enforce_case: true,
+                }
+            );
+        }
+
+        #[test]
+        fn duplicate_rename_from() {
+            let args = Arguments::try_parse_from([
+                "arg0",
+                "make",
+                "--rename-from",
+                "bar",
+                "--rename-from",
+                "baz",
+                "labelname",
+                "--rename-from",
+                "Bar",
+            ])
+            .unwrap();
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, None);
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert_eq!(
+                make.rename_from,
+                [
+                    "bar".parse::<LabelName>().unwrap(),
+                    "baz".parse().unwrap(),
+                    "Bar".parse().unwrap(),
+                ]
+            );
+            assert_eq!(make.repository, None);
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, None);
+            assert!(!dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert_eq!(
+                profile.specs()[0].rename_from(),
+                ["bar".parse::<LabelName>().unwrap(), "baz".parse().unwrap(),]
+            );
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::default(),
+                    description: None,
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::Warn,
+                    enforce_case: true,
+                }
+            );
+        }
+
+        #[test]
+        fn rename_from_self() {
+            let args = Arguments::try_parse_from([
+                "arg0",
+                "make",
+                "--rename-from",
+                "Labelname",
+                "labelname",
+            ])
+            .unwrap();
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, None);
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert_eq!(
+                make.rename_from,
+                ["Labelname".parse::<LabelName>().unwrap()]
+            );
+            assert_eq!(make.repository, None);
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let r = make.into_profile();
+            assert_matches!(r, Err(ConfigError::SelfRename(name)) => {
+                assert_eq!(name, "labelname");
             });
         }
 
@@ -559,18 +925,45 @@ mod tests {
                 "labelname",
             ])
             .unwrap();
-            assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
-                assert_eq!(make.color, None);
-                assert!(make.create);
-                assert_eq!(make.description, None);
-                assert!(!make.dry_run);
-                assert!(make.enforce_case);
-                assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
-                assert!(make.rename_from.is_empty());
-                assert_eq!(make.repository, Some(String::from("octocat/hello-world")));
-                assert!(make.update);
-                assert_eq!(make.name, "labelname");
-            });
+            let Arguments {
+                command: Command::Make(make),
+                ..
+            } = args
+            else {
+                panic!("`make` command not mapped to Command::Make");
+            };
+            assert_eq!(make.color, None);
+            assert!(make.create);
+            assert_eq!(make.description, None);
+            assert!(!make.dry_run);
+            assert!(make.enforce_case);
+            assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
+            assert!(make.rename_from.is_empty());
+            assert_eq!(make.repository, Some(String::from("octocat/hello-world")));
+            assert!(make.update);
+            assert_eq!(make.name, "labelname");
+            let MakeProfile {
+                repository,
+                dry_run,
+                profile,
+            } = make.into_profile().unwrap();
+            assert_eq!(repository, Some(String::from("octocat/hello-world")));
+            assert!(!dry_run);
+            assert_eq!(profile.name(), "make");
+            assert_eq!(profile.specs().len(), 1);
+            assert_eq!(profile.specs()[0].name(), "labelname");
+            assert!(profile.specs()[0].rename_from().is_empty());
+            assert_eq!(
+                profile.specs()[0].options(),
+                &LabelOptions {
+                    color: ColorSpec::default(),
+                    description: None,
+                    create: true,
+                    update: true,
+                    on_rename_clash: OnRenameClash::Warn,
+                    enforce_case: true,
+                }
+            );
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::config::PartialLabelOptions;
+use crate::config::{ConfigError, PartialLabelOptions};
 use clap::ValueEnum;
 use csscolorparser::Color;
 use ghrepo::GHRepo;
@@ -11,7 +11,7 @@ use serde::{
 };
 use serde_with::{serde_as, DeserializeAs, SerializeAs};
 use smartstring::alias::CompactString;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::ops::Deref;
 use thiserror::Error; // format()
@@ -305,12 +305,51 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelSpec {
-    pub(crate) name: LabelName,
-    // Invariant (enforced on creation by Config::get_profile): rename_from
-    // contains neither duplicates (*modulo* name casing) nor the same string
-    // as `name` (*modulo* case)
-    pub(crate) rename_from: Vec<LabelName>,
-    pub(crate) options: LabelOptions,
+    name: LabelName,
+    // Invariant (enforced on creation): rename_from contains neither
+    // duplicates (*modulo* case) nor the same string as `name` (*modulo* case)
+    rename_from: Vec<LabelName>,
+    options: LabelOptions,
+}
+
+impl LabelSpec {
+    pub(crate) fn new<I>(
+        name: LabelName,
+        rename_from: I,
+        options: LabelOptions,
+    ) -> Result<LabelSpec, ConfigError>
+    where
+        I: IntoIterator<Item = LabelName>,
+    {
+        let mut seen = HashSet::from([name.to_icase()]);
+        let mut rename_from2 = Vec::new();
+        for n in rename_from {
+            if unicase::eq(&name, &n) {
+                return Err(ConfigError::SelfRename(name));
+            } else if seen.insert(n.to_icase()) {
+                rename_from2.push(n);
+            }
+        }
+        Ok(LabelSpec {
+            name,
+            rename_from: rename_from2,
+            options,
+        })
+    }
+
+    pub(crate) fn name(&self) -> &LabelName {
+        &self.name
+    }
+
+    pub(crate) fn rename_from(&self) -> &[LabelName] {
+        &self.rename_from
+    }
+
+    // Used in config.rs tests
+    #[allow(unused)]
+    pub(crate) fn options(&self) -> &LabelOptions {
+        &self.options
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
