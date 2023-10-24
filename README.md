@@ -28,9 +28,22 @@ Usage
 
     labelmaker [<global options>] <subcommand> ...
 
-The `labelmaker` command has two subcommands, `apply` (for applying a set of
-label descriptions to one or more GitHub repositories) and `fetch` (for dumping
-a repository's labels as a configuration file), both detailed below.
+The `labelmaker` command has the following subcommands, each detailed below:
+
+- `apply` — Apply a set of label specifications to one or more GitHub
+  repositories
+
+- `fetch` — Dump a repository's labels as a configuration file
+
+- `make` — Create or update a single label
+
+Each command takes an argument or option for indicating what GitHub
+repositories to operate on.  A repository can be specified in the form
+`OWNER/NAME` (or, when `OWNER` is the authenticating user, just `NAME`) or as a
+GitHub repository URL.  If no repository is specified on the command line, then
+the current directory must belong to a Git repository whose `origin` remote
+points to a GitHub repository; `labelmaker` will operate on this remote
+repository.
 
 Global Options
 --------------
@@ -62,12 +75,6 @@ File" below) and a list of GitHub repositories as arguments.  It then creates
 and/or updates the labels of each repository based on the specification in the
 configuration file.
 
-Repositories can be specified in the form `OWNER/NAME` (or, when `OWNER` is the
-authenticating user, just `NAME`) and/or as GitHub repository URLs.  If no
-repositories are specified on the command line, then the current directory must
-belong to a Git repository whose `origin` remote points to a GitHub repository;
-`labelmaker` will operate on this remote repository.
-
 For each repository, all changes are calculated before modifying anything, so
 if an error occurs based on the state of the configuration file and/or current
 repository labels, it will be caught before any changes to the repository are
@@ -92,12 +99,6 @@ made.
 repository and dumps them as a `labelmaker` configuration file, ready for input
 into `labelmaker apply`.
 
-The repository can be specified in the form `OWNER/NAME` (or, when `OWNER` is
-the authenticating user, just `NAME`) or as a GitHub repository URL.  If no
-repository is specified on the command line, then the current directory must
-belong to a Git repository whose `origin` remote points to a GitHub repository;
-`labelmaker` will operate on this remote repository.
-
 The generated configuration file lists only label names, colors, and
 descriptions, no defaults, aside from the file-wide `color` setting having its
 default value for use as a reference.
@@ -111,6 +112,58 @@ default value for use as a reference.
 - `-P NAME`/`--profile NAME` — Set the name of the profile to place the labels
   under in the generated configuration file.  The configuration file's default
   profile will also be set to this value.  [default: `default`]
+
+
+`labelmaker make`
+-----------------
+
+    labelmaker [<global options>] make [<options>] <label-name>
+
+`labelmaker make` creates or updates the label with the given name in a GitHub
+repository, the same as if `labelmaker apply` had been run on that repository
+with a configuration profile containing a single label entry.
+
+### Options
+
+- `-c COLOR`/`--color COLOR` — Specify the label's color.  Colors are specified
+  using the same formats as in the configuration file.
+
+  This option can be specified multiple times, in which case one of the given
+  colors will be picked at random when creating the label, and no change will
+  be made to the label color when updating the label.
+
+  The color defaults to a random selection from the same built-in list as used
+  by the configuration file and `apply`.
+
+- `--create`/`--no-create` — Whether to create the label if it doesn't already
+  exist [default: `--create`]
+
+- `-d TEXT`, `--description TEXT` — Specify the label's description.
+
+- `--dry-run` — Do not change anything in GitHub, but do emit log messages
+  showing what would be changed.
+
+- `--enforce-case`/`--no-enforce-case` — Whether to rename an extant label if
+  its name differs in case from the name given on the command line [default:
+  `--enforce-case`]
+
+- `--on-rename-clash <ignore|warn|error>` — Specify what to do if the label
+  exists and one or more `--rename-from` labels also exist:
+    - `ignore`: Do nothing
+    - `warn` *(default)*: Emit a warning
+    - `error`:  Fail with an error
+
+- `--rename-from LABEL` — If `LABEL` exists, rename it to the label name
+  provided as the argument to `make`.
+
+  This option can be specified multiple times.  If multiple `--rename-from`
+  labels exist, an error will occur.
+
+- `-R REPO`/`--repository REPO` — Specify the GitHub repository to operate on.
+
+- `--update`/`--no-update` — Whether to update the label if its color and/or
+  description do not match the values given on the command line [default:
+  `--update`]
 
 
 Configuration File

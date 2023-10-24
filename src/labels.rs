@@ -1,4 +1,5 @@
 use crate::config::PartialLabelOptions;
+use clap::ValueEnum;
 use csscolorparser::Color;
 use ghrepo::GHRepo;
 use itertools::Itertools;
@@ -10,7 +11,7 @@ use serde::{
 };
 use serde_with::{serde_as, DeserializeAs, SerializeAs};
 use smartstring::alias::CompactString;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::ops::Deref;
 use thiserror::Error; // format()
@@ -304,12 +305,57 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LabelSpec {
-    pub(crate) name: LabelName,
-    // Invariant (enforced on creation by Config::get_profile): rename_from
-    // contains neither duplicates (*modulo* name casing) nor the same string
-    // as `name` (*modulo* case)
-    pub(crate) rename_from: Vec<LabelName>,
-    pub(crate) options: LabelOptions,
+    name: LabelName,
+    // Invariant (enforced on creation): rename_from contains neither
+    // duplicates (*modulo* case) nor the same string as `name` (*modulo* case)
+    rename_from: Vec<LabelName>,
+    options: LabelOptions,
+}
+
+impl LabelSpec {
+    pub(crate) fn new<I>(
+        name: LabelName,
+        rename_from: I,
+        options: LabelOptions,
+    ) -> Result<LabelSpec, LabelSpecError>
+    where
+        I: IntoIterator<Item = LabelName>,
+    {
+        let mut seen = HashSet::from([name.to_icase()]);
+        let mut rename_from2 = Vec::new();
+        for n in rename_from {
+            if unicase::eq(&name, &n) {
+                return Err(LabelSpecError::SelfRename(name));
+            } else if seen.insert(n.to_icase()) {
+                rename_from2.push(n);
+            }
+        }
+        Ok(LabelSpec {
+            name,
+            rename_from: rename_from2,
+            options,
+        })
+    }
+
+    pub(crate) fn name(&self) -> &LabelName {
+        &self.name
+    }
+
+    pub(crate) fn rename_from(&self) -> &[LabelName] {
+        &self.rename_from
+    }
+
+    // Used in config.rs tests
+    #[allow(unused)]
+    pub(crate) fn options(&self) -> &LabelOptions {
+        &self.options
+    }
+}
+
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+pub(crate) enum LabelSpecError {
+    #[error("label {0:?} cannot be renamed from itself")]
+    SelfRename(LabelName),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -355,12 +401,15 @@ impl Default for LabelOptions {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum OnRenameClash {
+    /// Do nothing
     Ignore,
+    /// Emit a warning
     #[default]
     Warn,
+    /// Fail with an error
     Error,
 }
 
@@ -778,6 +827,67 @@ mod tests {
             );
             let after_json = serde_json::json!({"description": after}).to_string();
             assert_eq!(serde_json::to_string(&cntr).unwrap(), after_json);
+        }
+    }
+
+    mod label_spec {
+        use super::*;
+        use assert_matches::assert_matches;
+
+        #[test]
+        fn simple() {
+            let opts = LabelOptions {
+                color: ColorSpec::Fixed("turquoise".parse().unwrap()),
+                description: Some("A label for labelling".parse().unwrap()),
+                ..LabelOptions::default()
+            };
+            let spec = LabelSpec::new(
+                "foo".parse().unwrap(),
+                ["bar".parse().unwrap(), "baz".parse().unwrap()],
+                opts.clone(),
+            )
+            .unwrap();
+            assert_eq!(spec.name(), "foo");
+            assert_eq!(spec.rename_from(), ["bar", "baz"]);
+            assert_eq!(spec.options, opts);
+        }
+
+        #[test]
+        fn duplicate_rename_from() {
+            let opts = LabelOptions {
+                color: ColorSpec::Fixed("turquoise".parse().unwrap()),
+                description: Some("A label for labelling".parse().unwrap()),
+                ..LabelOptions::default()
+            };
+            let spec = LabelSpec::new(
+                "foo".parse().unwrap(),
+                [
+                    "BAR".parse().unwrap(),
+                    "baz".parse().unwrap(),
+                    "Bar".parse().unwrap(),
+                ],
+                opts.clone(),
+            )
+            .unwrap();
+            assert_eq!(spec.name(), "foo");
+            assert_eq!(spec.rename_from(), ["BAR", "baz"]);
+            assert_eq!(spec.options, opts);
+        }
+
+        #[test]
+        fn rename_from_self() {
+            let r = LabelSpec::new(
+                "foo".parse().unwrap(),
+                [
+                    "BAR".parse().unwrap(),
+                    "baz".parse().unwrap(),
+                    "Foo".parse().unwrap(),
+                ],
+                LabelOptions::default(),
+            );
+            assert_matches!(r, Err(LabelSpecError::SelfRename(name)) => {
+                assert_eq!(name, "foo");
+            });
         }
     }
 
