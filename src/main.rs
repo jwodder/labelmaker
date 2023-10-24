@@ -3,7 +3,7 @@ mod config;
 mod labels;
 
 use crate::client::{GitHub, Repository};
-use crate::config::Config;
+use crate::config::{Config, Profile};
 use crate::labels::*;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
@@ -98,89 +98,6 @@ enum Command {
     Make(Make),
 }
 
-/// Create or update a single label
-#[derive(Args, Clone, Debug, PartialEq)]
-// See <https://jwodder.github.io/kbits/posts/clap-bool-negate/> for what's
-// going on with the no-* options
-struct Make {
-    /// The label's color.
-    ///
-    /// Colors can be specified as a hex RGB string "#rrggbb" (with or without
-    /// leading #) or as CSS color names.
-    ///
-    /// This option can be specified multiple times, in which case one of the
-    /// given colors will be picked at random when creating the label, and no
-    /// change will be made to the label color when updating the label.
-    ///
-    /// Defaults to a random selection from a built-in list.
-    #[arg(short = 'c', long)]
-    color: Option<Vec<Color>>,
-
-    /// Do not create the label
-    #[arg(long = "no-create", action = ArgAction::SetFalse)]
-    create: bool,
-
-    /// Create the label if it does not already exist [default]
-    #[arg(long = "create", overrides_with = "create")]
-    _no_create: bool,
-
-    /// The label's description
-    #[arg(short = 'd', long)]
-    description: Option<Description>,
-
-    /// Do not rename an extant label if its name differs in case from the name
-    /// given on the command line
-    #[arg(long = "no-enforce-case", action = ArgAction::SetFalse)]
-    enforce_case: bool,
-
-    /// Rename an extant label if its name differs in case from the name given
-    /// on the command line [default]
-    #[arg(long = "enforce-case", overrides_with = "enforce_case")]
-    _no_enforce_case: bool,
-
-    /// Specify what to do if the label exists and one or more --rename-from
-    /// labels also exist.
-    #[arg(
-        long,
-        value_enum,
-        default_value_t,
-        value_name = "ignore|warn|error",
-        ignore_case = true
-    )]
-    on_rename_clash: OnRenameClash,
-
-    /// If the given label exists, rename it to the name given on the command
-    /// line.
-    ///
-    /// This option can be specified multiple times.  If multiple --rename-from
-    /// labels exist, an error will occur.
-    #[arg(long, value_name = "LABEL")]
-    rename_from: Vec<LabelName>,
-
-    /// The GitHub repository to operate on.
-    ///
-    /// The repository can be specified in the form `OWNER/NAME` (or, when
-    /// `OWNER` is the authenticating user, just `NAME`) or as a GitHub
-    /// repository URL.
-    ///
-    /// If not specified, then the GitHub repository for the local Git
-    /// repository is used.
-    #[arg(short = 'R', long)]
-    repository: Option<String>,
-
-    /// Do not update the label's color or description
-    #[arg(long = "no-update", action = ArgAction::SetFalse)]
-    update: bool,
-
-    /// Update the label if its color and/or description do not match the
-    /// values given on the command line [default]
-    #[arg(long = "update", overrides_with = "update")]
-    _no_update: bool,
-
-    /// Name of the label
-    name: LabelName,
-}
-
 impl Command {
     async fn run(self, client: GitHub) -> anyhow::Result<()> {
         match self {
@@ -240,10 +157,135 @@ impl Command {
                 cfg.dump(outfile)
                     .context("failed outputting configuration")?;
             }
-            Command::Make { .. } => todo!(),
+            Command::Make(make) => make.run(client).await?,
         }
         Ok(())
     }
+}
+
+/// Create or update a single label
+#[derive(Args, Clone, Debug, PartialEq)]
+// See <https://jwodder.github.io/kbits/posts/clap-bool-negate/> for what's
+// going on with the no-* options
+struct Make {
+    /// The label's color.
+    ///
+    /// Colors can be specified as a hex RGB string "#rrggbb" (with or without
+    /// leading #) or as CSS color names.
+    ///
+    /// This option can be specified multiple times, in which case one of the
+    /// given colors will be picked at random when creating the label, and no
+    /// change will be made to the label color when updating the label.
+    ///
+    /// Defaults to a random selection from a built-in list.
+    #[arg(short = 'c', long)]
+    color: Option<Vec<Color>>,
+
+    /// Do not create the label
+    #[arg(long = "no-create", action = ArgAction::SetFalse)]
+    create: bool,
+
+    /// Create the label if it does not already exist [default]
+    #[arg(long = "create", overrides_with = "create")]
+    _no_create: bool,
+
+    /// The label's description
+    #[arg(short = 'd', long)]
+    description: Option<Description>,
+
+    /// Do not change anything in GitHub, but do emit log messages showing what
+    /// would be changed.
+    #[arg(long)]
+    dry_run: bool,
+
+    /// Do not rename an extant label if its name differs in case from the name
+    /// given on the command line
+    #[arg(long = "no-enforce-case", action = ArgAction::SetFalse)]
+    enforce_case: bool,
+
+    /// Rename an extant label if its name differs in case from the name given
+    /// on the command line [default]
+    #[arg(long = "enforce-case", overrides_with = "enforce_case")]
+    _no_enforce_case: bool,
+
+    /// Specify what to do if the label exists and one or more --rename-from
+    /// labels also exist.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t,
+        value_name = "ignore|warn|error",
+        ignore_case = true
+    )]
+    on_rename_clash: OnRenameClash,
+
+    /// If the given label exists, rename it to the name given on the command
+    /// line.
+    ///
+    /// This option can be specified multiple times.  If multiple --rename-from
+    /// labels exist, an error will occur.
+    #[arg(long, value_name = "LABEL")]
+    rename_from: Vec<LabelName>,
+
+    /// The GitHub repository to operate on.
+    ///
+    /// The repository can be specified in the form `OWNER/NAME` (or, when
+    /// `OWNER` is the authenticating user, just `NAME`) or as a GitHub
+    /// repository URL.
+    ///
+    /// If not specified, then the GitHub repository for the local Git
+    /// repository is used.
+    #[arg(short = 'R', long)]
+    repository: Option<String>,
+
+    /// Do not update the label's color or description
+    #[arg(long = "no-update", action = ArgAction::SetFalse)]
+    update: bool,
+
+    /// Update the label if its color and/or description do not match the
+    /// values given on the command line [default]
+    #[arg(long = "update", overrides_with = "update")]
+    _no_update: bool,
+
+    /// Name of the label
+    name: LabelName,
+}
+
+impl Make {
+    async fn run(self, client: GitHub) -> anyhow::Result<()> {
+        let MakeProfile {
+            repository,
+            dry_run,
+            profile,
+        } = self.into_profile()?;
+        let me = client
+            .whoami()
+            .await
+            .context("unable to determine authenticating user's login name")?;
+        let repo = match repository {
+            Some(s) => GHRepo::from_str_with_owner(&s, &me)?,
+            None => LocalRepo::for_cwd()?
+                .github_remote("origin")
+                .context("unable to determine remote GitHub repository for local Git repository")?,
+        };
+        client
+            .get_label_maker(repo, rand::thread_rng(), dry_run)
+            .await?
+            .make(&profile)
+            .await?;
+        Ok(())
+    }
+
+    fn into_profile(self) -> anyhow::Result<MakeProfile> {
+        todo!()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct MakeProfile {
+    repository: Option<String>,
+    dry_run: bool,
+    profile: Profile,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -305,6 +347,7 @@ mod tests {
                 assert_eq!(make.color, None);
                 assert!(make.create);
                 assert_eq!(make.description, None);
+                assert!(!make.dry_run);
                 assert!(make.enforce_case);
                 assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
                 assert!(make.rename_from.is_empty());
@@ -323,12 +366,14 @@ mod tests {
                 "--update",
                 "--enforce-case",
                 "labelname",
+                "--dry-run",
             ])
             .unwrap();
             assert_matches!(args, Arguments {command: Command::Make(make), ..} => {
                 assert_eq!(make.color, None);
                 assert!(make.create);
                 assert_eq!(make.description, None);
+                assert!(make.dry_run);
                 assert!(make.enforce_case);
                 assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
                 assert!(make.rename_from.is_empty());
@@ -353,6 +398,7 @@ mod tests {
                 assert_eq!(make.color, None);
                 assert!(!make.create);
                 assert_eq!(make.description, None);
+                assert!(!make.dry_run);
                 assert!(!make.enforce_case);
                 assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
                 assert!(make.rename_from.is_empty());
@@ -370,6 +416,7 @@ mod tests {
                 assert_eq!(make.color, Some(vec!["red".parse().unwrap()]));
                 assert!(make.create);
                 assert_eq!(make.description, None);
+                assert!(!make.dry_run);
                 assert!(make.enforce_case);
                 assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
                 assert!(make.rename_from.is_empty());
@@ -396,6 +443,7 @@ mod tests {
                 assert_eq!(make.color, Some(vec!["red".parse().unwrap(), "green".parse().unwrap(), "blue".parse().unwrap()]));
                 assert!(make.create);
                 assert_eq!(make.description, None);
+                assert!(!make.dry_run);
                 assert!(make.enforce_case);
                 assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
                 assert!(make.rename_from.is_empty());
@@ -420,6 +468,7 @@ mod tests {
                 assert_eq!(make.color, None);
                 assert!(make.create);
                 assert_eq!(make.description, None);
+                assert!(!make.dry_run);
                 assert!(make.enforce_case);
                 assert_eq!(make.on_rename_clash, value);
                 assert!(make.rename_from.is_empty());
@@ -438,6 +487,7 @@ mod tests {
                 assert_eq!(make.color, None);
                 assert!(make.create);
                 assert_eq!(make.description, None);
+                assert!(!make.dry_run);
                 assert!(make.enforce_case);
                 assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
                 assert_eq!(make.rename_from, ["bar".parse::<LabelName>().unwrap()]);
@@ -465,6 +515,7 @@ mod tests {
                 assert_eq!(make.color, None);
                 assert!(make.create);
                 assert_eq!(make.description, None);
+                assert!(!make.dry_run);
                 assert!(make.enforce_case);
                 assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
                 assert_eq!(make.rename_from, ["bar".parse::<LabelName>().unwrap(), "baz".parse().unwrap(), "quux".parse().unwrap()]);
@@ -488,6 +539,7 @@ mod tests {
                 assert_eq!(make.color, None);
                 assert!(make.create);
                 assert_eq!(make.description, None);
+                assert!(!make.dry_run);
                 assert!(make.enforce_case);
                 assert_eq!(make.on_rename_clash, OnRenameClash::Warn);
                 assert!(make.rename_from.is_empty());
