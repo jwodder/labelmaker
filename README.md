@@ -70,10 +70,10 @@ prompted to unlock the keyring.
 
     labelmaker [<global options>] apply [<options>] <config-file> [<repository> ...]
 
-`labelmaker apply` takes a path to a configuration file (See "Configuration
-File" below) and a list of GitHub repositories as arguments.  It then creates
-and/or updates the labels of each repository based on the specification in the
-configuration file.
+`labelmaker apply` takes a path to a configuration file (See "[Configuration
+File](#configuration-file)" below) and a list of GitHub repositories as
+arguments.  It then creates and/or updates the labels of each repository based
+on the specification in the configuration file.
 
 For each repository, all changes are calculated before modifying anything, so
 if an error occurs based on the state of the configuration file and/or current
@@ -101,7 +101,7 @@ into `labelmaker apply`.
 
 The generated configuration file lists only label names, colors, and
 descriptions, no defaults, aside from the file-wide `color` setting having its
-default value for use as a reference.
+default value included for use as a reference.
 
 ### Options
 
