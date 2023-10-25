@@ -1,3 +1,6 @@
+v0.4.0 (in development)
+-----------------------
+
 v0.3.0 (2023-10-24)
 -------------------
 - Properly normalize whitespace in label names
