@@ -42,7 +42,8 @@ impl Profile {
     {
         let mut defined_labels = HashSet::<ICaseName>::new();
         let mut renamed_from_to = HashMap::<ICaseName, LabelName>::new();
-        let mut specs2 = Vec::new();
+        let specs = specs.into_iter();
+        let mut specs2 = Vec::with_capacity(specs.size_hint().0);
         for sp in specs {
             let name = sp.name().clone();
             let iname = name.to_icase();
@@ -132,7 +133,8 @@ impl LabelSpec {
         I: IntoIterator<Item = LabelName>,
     {
         let mut seen = HashSet::from([name.to_icase()]);
-        let mut rename_from2 = Vec::new();
+        let rename_from = rename_from.into_iter();
+        let mut rename_from2 = Vec::with_capacity(rename_from.size_hint().0);
         for n in rename_from {
             if unicase::eq(&name, &n) {
                 return Err(LabelSpecError::SelfRename(name));
