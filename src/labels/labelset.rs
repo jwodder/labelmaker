@@ -1,6 +1,5 @@
 use super::*;
 use crate::profile::*;
-use csscolorparser::Color;
 use ghrepo::GHRepo;
 use itertools::Itertools; // format()
 use rand::Rng;
@@ -176,7 +175,7 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
                     "label {:?} in {} (color: {:?}, description: {:?})",
                     label.name,
                     self.repo,
-                    hashless_rgb(&label.color),
+                    label.color,
                     label.description.as_deref().unwrap_or_default()
                 )?;
             }
@@ -201,7 +200,7 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
                     if !std::mem::replace(&mut first, false) {
                         write!(f, ", ")?;
                     }
-                    write!(f, "new color: {:?}", hashless_rgb(c))?;
+                    write!(f, "new color: {:?}", c)?;
                 }
                 if let Some(d) = description.as_ref() {
                     if !std::mem::replace(&mut first, false) {

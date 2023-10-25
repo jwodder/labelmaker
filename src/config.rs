@@ -1,7 +1,6 @@
 use crate::labels::*;
 use crate::profile::*;
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -121,15 +120,20 @@ impl Default for TopOptions {
     }
 }
 
-#[skip_serializing_none]
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct PartialLabelOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) create: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) update: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) color: Option<ColorSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) description: Option<Description>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) on_rename_clash: Option<OnRenameClash>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) enforce_case: Option<bool>,
 }
 
@@ -885,30 +889,30 @@ mod tests {
         eprintln!("{toml}");
         assert_eq!(
             toml,
-            indoc! {r##"
+            indoc! {r#"
             [defaults]
             profile = "test"
-            color = ["#0052cc", "#006b75", "#0e8a16", "#1d76db", "#5319e7", "#b60205", "#bfd4f2", "#bfdadc", "#c2e0c6", "#c5def5", "#d4c5f9", "#d93f0b", "#e99695", "#f9d0c4", "#fbca04", "#fef2c0"]
+            color = ["0052cc", "006b75", "0e8a16", "1d76db", "5319e7", "b60205", "bfd4f2", "bfdadc", "c2e0c6", "c5def5", "d4c5f9", "d93f0b", "e99695", "f9d0c4", "fbca04", "fef2c0"]
 
             [[profiles.test.labels]]
             name = "Foo"
-            color = "#ff0000"
+            color = "ff0000"
             description = "Foo all the bars"
 
             [[profiles.test.labels]]
             name = "bar"
-            color = "#0000ff"
+            color = "0000ff"
             description = "Bar all the foos"
 
             [[profiles.test.labels]]
             name = "empty-desc"
-            color = "#ffff00"
+            color = "ffff00"
             description = ""
 
             [[profiles.test.labels]]
             name = "no-desc"
-            color = "#008000"
-        "##}
+            color = "008000"
+        "#}
         );
     }
 }

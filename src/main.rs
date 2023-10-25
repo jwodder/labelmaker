@@ -11,7 +11,6 @@ use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
 use anyhow::Context;
 use clap::{builder::ArgAction, Args, Parser, Subcommand};
-use csscolorparser::Color;
 use ghrepo::{GHRepo, LocalRepo};
 use log::{Level, LevelFilter};
 use std::io;

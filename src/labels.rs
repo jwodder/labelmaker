@@ -1,18 +1,18 @@
 mod labelset;
 pub(crate) use self::labelset::*;
-use csscolorparser::Color;
+use derive_more::{AsRef, Deref, Display, FromStr};
 use serde::{
     de::{Deserializer, Unexpected, Visitor},
     ser::Serializer,
     Deserialize, Serialize,
 };
-use serde_with::{serde_as, DeserializeAs, SerializeAs};
 use smartstring::alias::CompactString;
 use std::fmt;
-use std::ops::Deref;
 use thiserror::Error;
 
-#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(AsRef, Clone, Deref, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[as_ref(forward)]
+#[deref(forward)]
 pub(crate) struct LabelName(CompactString);
 
 pub(crate) type ICaseName = unicase::UniCase<LabelName>;
@@ -26,12 +26,6 @@ impl LabelName {
 impl fmt::Debug for LabelName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
-    }
-}
-
-impl fmt::Display for LabelName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
     }
 }
 
@@ -67,12 +61,6 @@ impl std::str::FromStr for LabelName {
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 #[error("label names cannot be empty or all-whitespace")]
 pub(crate) struct ParseLabelNameError;
-
-impl AsRef<str> for LabelName {
-    fn as_ref(&self) -> &str {
-        self.0.as_ref()
-    }
-}
 
 impl Serialize for LabelName {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -111,18 +99,51 @@ impl<'de> Deserialize<'de> for LabelName {
     }
 }
 
-#[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Default, FromStr, PartialEq)]
+pub(crate) struct Color(csscolorparser::Color);
+
+impl fmt::Debug for Color {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, r#""{}""#, self)
+    }
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let [r, g, b, _] = self.0.to_rgba8();
+        write!(f, "{:02x}{:02x}{:02x}", r, g, b)
+    }
+}
+
+impl From<(u8, u8, u8)> for Color {
+    fn from(value: (u8, u8, u8)) -> Color {
+        Color(csscolorparser::Color::from(value))
+    }
+}
+
+impl Serialize for Color {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_string().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Color {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        csscolorparser::Color::deserialize(deserializer).map(Color)
+    }
+}
+
+#[derive(AsRef, Clone, Default, Deref, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[as_ref(forward)]
+#[deref(forward)]
 pub(crate) struct Description(String);
 
 impl fmt::Debug for Description {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
-    }
-}
-
-impl fmt::Display for Description {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
     }
 }
 
@@ -149,20 +170,6 @@ impl std::str::FromStr for Description {
     }
 }
 
-impl AsRef<str> for Description {
-    fn as_ref(&self) -> &str {
-        self.0.as_ref()
-    }
-}
-
-impl Deref for Description {
-    type Target = str;
-
-    fn deref(&self) -> &str {
-        self.0.deref()
-    }
-}
-
 impl Serialize for Description {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -182,37 +189,12 @@ impl<'de> Deserialize<'de> for Description {
     }
 }
 
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Label {
     pub(crate) name: LabelName,
-    #[serde_as(as = "AsHashlessRgb")]
     pub(crate) color: Color,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) description: Option<Description>,
-}
-
-pub(crate) fn hashless_rgb(color: &Color) -> String {
-    let [r, g, b, _] = color.to_rgba8();
-    format!("{:02x}{:02x}{:02x}", r, g, b)
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct AsHashlessRgb;
-
-impl SerializeAs<Color> for AsHashlessRgb {
-    fn serialize_as<S: Serializer>(color: &Color, serializer: S) -> Result<S::Ok, S::Error> {
-        hashless_rgb(color).serialize(serializer)
-    }
-}
-
-impl<'de> DeserializeAs<'de, Color> for AsHashlessRgb {
-    fn deserialize_as<D>(deserializer: D) -> Result<Color, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Color::deserialize(deserializer)
-    }
 }
 
 #[cfg(test)]
@@ -222,6 +204,7 @@ mod tests {
     mod label_name {
         use super::*;
         use rstest::rstest;
+        use std::convert::AsRef;
 
         #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
         struct NameContainer {
@@ -234,7 +217,7 @@ mod tests {
             assert_eq!(name, "foo");
             assert_ne!(name, "Foo");
             assert_eq!(name.to_string(), "foo");
-            assert_eq!(name.as_ref(), "foo");
+            assert_eq!(AsRef::<str>::as_ref(&name), "foo");
             assert_eq!(format!("{name:?}"), r#""foo""#);
             let cntr = NameContainer { name };
             assert_eq!(serde_json::to_string(&cntr).unwrap(), r#"{"name":"foo"}"#);
@@ -260,7 +243,7 @@ mod tests {
             let name = before.parse::<LabelName>().unwrap();
             assert_eq!(name, after);
             assert_eq!(name.to_string(), after);
-            assert_eq!(name.as_ref(), after);
+            assert_eq!(AsRef::<str>::as_ref(&name), after);
             assert_eq!(format!("{name:?}"), format!("{after:?}"));
             let cntr = NameContainer { name: name.clone() };
             let before_json = serde_json::json!({"name": before}).to_string();
@@ -293,10 +276,8 @@ mod tests {
         use super::*;
         use rstest::rstest;
 
-        #[serde_as]
-        #[derive(Clone, Debug, PartialEq, Serialize)]
+        #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
         struct ColorContainer {
-            #[serde_as(as = "AsHashlessRgb")]
             color: Color,
         }
 
@@ -307,16 +288,23 @@ mod tests {
         #[case("#D90DAD80", "d90dad")]
         #[case("CCC", "cccccc")]
         #[case("c0c0c0", "c0c0c0")]
-        fn as_hashless_rgb(#[case] color: Color, #[case] s: &str) {
-            let obj = ColorContainer { color };
-            let expected = format!(r#"{{"color":"{s}"}}"#);
-            assert_eq!(serde_json::to_string(&obj).unwrap(), expected);
+        fn test(#[case] spec: &str, #[case] disp: &str) {
+            let color = spec.parse::<Color>().unwrap();
+            assert_eq!(color.to_string(), disp);
+            assert_eq!(format!("{color:?}"), format!("{disp:?}"));
+            let cntr = ColorContainer { color };
+            let expected = format!(r#"{{"color":"{disp}"}}"#);
+            assert_eq!(serde_json::to_string(&cntr).unwrap(), expected);
+            let json = serde_json::json!({"color": spec}).to_string();
+            assert_eq!(serde_json::from_str::<ColorContainer>(&json).unwrap(), cntr);
         }
     }
 
     mod description {
         use super::*;
         use rstest::rstest;
+        use std::convert::AsRef;
+        use std::ops::Deref;
 
         #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
         struct DescContainer {
@@ -347,7 +335,7 @@ mod tests {
             let desc = before.parse::<Description>().unwrap();
             assert_eq!(desc, after);
             assert_eq!(desc.to_string(), after);
-            assert_eq!(desc.as_ref(), after);
+            assert_eq!(AsRef::<str>::as_ref(&desc), after);
             assert_eq!(desc.deref(), after);
             assert_eq!(format!("{desc:?}"), format!("{after:?}"));
             let cntr = DescContainer {

@@ -2,14 +2,12 @@ mod util;
 use self::util::*;
 use crate::labels::*;
 use crate::profile::Profile;
-use csscolorparser::Color;
 use ghrepo::GHRepo;
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, InvalidHeaderValue},
     Client, ClientBuilder, Method, Response,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_with::{serde_as, skip_serializing_none};
 use std::cell::Cell;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -235,7 +233,7 @@ impl<'a> Repository<'a> {
         label: LabelName,
         payload: UpdateLabel,
     ) -> Result<Label, RequestError> {
-        let url = urljoin(&self.labels_url, [label.as_ref()]);
+        let url = urljoin(&self.labels_url, [label]);
         self.client.patch::<UpdateLabel, Label>(url, &payload).await
     }
 }
@@ -331,13 +329,13 @@ impl<'a, R: rand::Rng> LabelMaker<'a, R> {
     }
 }
 
-#[serde_as]
-#[skip_serializing_none]
 #[derive(Clone, Debug, PartialEq, Serialize)]
 struct UpdateLabel {
+    #[serde(skip_serializing_if = "Option::is_none")]
     new_name: Option<LabelName>,
-    #[serde_as(as = "Option<AsHashlessRgb>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     color: Option<Color>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<Description>,
 }
 
