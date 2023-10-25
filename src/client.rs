@@ -1,7 +1,7 @@
 mod util;
 use self::util::*;
-use crate::config::Profile;
 use crate::labels::*;
+use crate::profile::Profile;
 use csscolorparser::Color;
 use ghrepo::GHRepo;
 use reqwest::{

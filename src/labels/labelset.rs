@@ -1,4 +1,5 @@
 use super::*;
+use crate::profile::*;
 use csscolorparser::Color;
 use ghrepo::GHRepo;
 use itertools::Itertools; // format()
@@ -324,6 +325,12 @@ mod tests {
         use rand_chacha::ChaCha12Rng;
         use rstest::rstest;
 
+        macro_rules! spec {
+            {$name:literal, $rename_from:expr, $options:expr $(,)?} => {
+                LabelSpec::new($name.parse().unwrap(), $rename_from, $options).unwrap()
+            }
+        }
+
         fn sample_label_set() -> LabelSet<ChaCha12Rng> {
             let mut labels = LabelSet::new(ChaCha12Rng::seed_from_u64(0x0123456789ABCDEF));
             labels.extend([
@@ -354,15 +361,15 @@ mod tests {
         #[test]
         fn create_new_label() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "quux".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "quux",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("green".parse().unwrap()),
                     description: Some("Quux you".parse().unwrap()),
                     create: true,
                     ..LabelOptions::default()
-                },
+                }
             };
             let res = labels.resolve(&spec).unwrap();
             assert_eq!(
@@ -378,10 +385,10 @@ mod tests {
         #[test]
         fn create_new_label_random_color() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "quux".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "quux",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::default(),
                     create: true,
                     ..LabelOptions::default()
@@ -401,10 +408,10 @@ mod tests {
         #[test]
         fn create_new_label_empty_color_list() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "quux".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "quux",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Random(Vec::new()),
                     create: true,
                     ..LabelOptions::default()
@@ -424,10 +431,10 @@ mod tests {
         #[test]
         fn no_create_new_label() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "quux".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "quux",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("green".parse().unwrap()),
                     description: Some("Quux you".parse().unwrap()),
                     create: false,
@@ -441,10 +448,10 @@ mod tests {
         #[test]
         fn no_change_needed() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     ..LabelOptions::default()
@@ -457,10 +464,10 @@ mod tests {
         #[test]
         fn update_color() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("purple".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     update: true,
@@ -482,10 +489,10 @@ mod tests {
         #[test]
         fn update_description() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Just what is a \"foo\", anyway?".parse().unwrap()),
                     update: true,
@@ -507,10 +514,10 @@ mod tests {
         #[test]
         fn dont_update_to_null_description() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: None,
                     update: true,
@@ -524,10 +531,10 @@ mod tests {
         #[test]
         fn update_color_and_description() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("silver".parse().unwrap()),
                     description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: true,
@@ -549,10 +556,10 @@ mod tests {
         #[test]
         fn differs_update_false() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("silver".parse().unwrap()),
                     description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: false,
@@ -568,10 +575,10 @@ mod tests {
         #[case(false)]
         fn enforce_case_difference(#[case] update: bool) {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "Foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "Foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     update,
@@ -594,10 +601,10 @@ mod tests {
         #[test]
         fn enforce_case_difference_and_update_description() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "Foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "Foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: true,
@@ -620,10 +627,10 @@ mod tests {
         #[test]
         fn enforce_case_difference_and_no_update_description() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "Foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "Foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: false,
@@ -646,10 +653,10 @@ mod tests {
         #[test]
         fn no_enforce_case_difference_and_update_description() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "Foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "Foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: true,
@@ -674,10 +681,10 @@ mod tests {
         #[case(false)]
         fn update_does_not_imply_enforce_case_no_change(#[case] update: bool) {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "Foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "Foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     update,
@@ -692,10 +699,10 @@ mod tests {
         #[test]
         fn update_does_not_imply_enforce_case_still_change() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "Foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "Foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("What is a foo without its bar?".parse().unwrap()),
                     update: true,
@@ -720,10 +727,10 @@ mod tests {
         #[case(false)]
         fn rename(#[case] create: bool) {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "quux".parse().unwrap(),
-                rename_from: vec!["foo".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "quux",
+                vec!["foo".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     create,
@@ -745,10 +752,10 @@ mod tests {
         #[test]
         fn rename_and_update() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "quux".parse().unwrap(),
-                rename_from: vec!["foo".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "quux",
+                vec!["foo".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("magenta".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     update: true,
@@ -770,10 +777,10 @@ mod tests {
         #[test]
         fn rename_and_skip_update() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "quux".parse().unwrap(),
-                rename_from: vec!["foo".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "quux",
+                vec!["foo".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("magenta".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     update: false,
@@ -797,10 +804,10 @@ mod tests {
         #[case(false)]
         fn rename_across_case(#[case] enforce_case: bool) {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "quux".parse().unwrap(),
-                rename_from: vec!["FOO".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "quux",
+                vec!["FOO".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     enforce_case,
@@ -822,10 +829,10 @@ mod tests {
         #[test]
         fn multiple_rename_candidates() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "quux".parse().unwrap(),
-                rename_from: vec!["Foo".parse().unwrap(), "bar".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "quux",
+                vec!["Foo".parse().unwrap(), "bar".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("yellow".parse().unwrap()),
                     description: None,
                     ..LabelOptions::default()
@@ -845,10 +852,10 @@ mod tests {
         #[test]
         fn rename_clash_ignore() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Ignore,
@@ -862,10 +869,10 @@ mod tests {
         #[test]
         fn rename_clash_warn() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Warn,
@@ -892,10 +899,10 @@ mod tests {
         #[test]
         fn rename_clash_error() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Error,
@@ -916,10 +923,10 @@ mod tests {
         #[test]
         fn enforce_case_and_rename_clash_ignore() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "Foo".parse().unwrap(),
-                rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "Foo",
+                vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Ignore,
@@ -942,10 +949,10 @@ mod tests {
         #[test]
         fn enforce_case_and_rename_clash_warn() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "Foo".parse().unwrap(),
-                rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "Foo",
+                vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Warn,
@@ -981,10 +988,10 @@ mod tests {
         #[test]
         fn enforce_case_and_rename_clash_error() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "Foo".parse().unwrap(),
-                rename_from: vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
-                options: LabelOptions {
+            let spec = spec! {
+                "Foo",
+                vec!["bar".parse().unwrap(), "nexists".parse().unwrap()],
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Error,
@@ -1006,14 +1013,14 @@ mod tests {
         #[test]
         fn multiple_rename_clash_ignore() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: vec![
+            let spec = spec! {
+                "foo",
+                vec![
                     "no-desc".parse().unwrap(),
                     "nexists".parse().unwrap(),
                     "bar".parse().unwrap(),
                 ],
-                options: LabelOptions {
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Ignore,
@@ -1027,14 +1034,14 @@ mod tests {
         #[test]
         fn multiple_rename_clash_warn() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: vec![
+            let spec = spec! {
+                "foo",
+                vec![
                     "no-desc".parse().unwrap(),
                     "nexists".parse().unwrap(),
                     "bar".parse().unwrap(),
                 ],
-                options: LabelOptions {
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Warn,
@@ -1064,14 +1071,14 @@ mod tests {
         #[test]
         fn multiple_rename_clash_error() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: vec![
+            let spec = spec! {
+                "foo",
+                vec![
                     "no-desc".parse().unwrap(),
                     "nexists".parse().unwrap(),
                     "bar".parse().unwrap(),
                 ],
-                options: LabelOptions {
+                LabelOptions {
                     color: ColorSpec::Fixed("red".parse().unwrap()),
                     description: Some("Foo all the bars".parse().unwrap()),
                     on_rename_clash: OnRenameClash::Error,
@@ -1092,10 +1099,10 @@ mod tests {
         #[test]
         fn dont_update_null_desc_to_empty() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "no-desc".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "no-desc",
+                Vec::new(),
+                LabelOptions {
                     description: Some("".parse().unwrap()),
                     ..LabelOptions::default()
                 },
@@ -1107,10 +1114,10 @@ mod tests {
         #[test]
         fn dont_update_color_outside_of_random_list() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Random(vec![
                         "purple".parse().unwrap(),
                         "orange".parse().unwrap(),
@@ -1127,10 +1134,10 @@ mod tests {
         #[test]
         fn dont_update_color_outside_of_empty_random_list() {
             let mut labels = sample_label_set();
-            let spec = LabelSpec {
-                name: "foo".parse().unwrap(),
-                rename_from: Vec::new(),
-                options: LabelOptions {
+            let spec = spec! {
+                "foo",
+                Vec::new(),
+                LabelOptions {
                     color: ColorSpec::Random(Vec::new()),
                     update: true,
                     ..LabelOptions::default()

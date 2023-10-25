@@ -1,7 +1,8 @@
 use crate::labels::*;
+use crate::profile::*;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -103,73 +104,6 @@ impl Config {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Profile {
-    name: String,
-    // Invariant (enforced on creation): The various LabelSpecs do not step on
-    // each others' toes
-    specs: Vec<LabelSpec>,
-}
-
-impl Profile {
-    pub(crate) fn new<I>(name: &str, specs: I) -> Result<Profile, ProfileError>
-    where
-        I: IntoIterator<Item = LabelSpec>,
-    {
-        let mut defined_labels = HashSet::<ICaseName>::new();
-        let mut renamed_from_to = HashMap::<ICaseName, LabelName>::new();
-        let mut specs2 = Vec::new();
-        for sp in specs {
-            let name = sp.name().clone();
-            let iname = name.to_icase();
-            if !defined_labels.insert(iname.clone()) {
-                return Err(ProfileError::RepeatedLabel(name));
-            }
-            if let Some(renamer) = renamed_from_to.remove(&iname) {
-                return Err(ProfileError::LabelRenamed {
-                    label: name,
-                    renamer,
-                });
-            }
-            for n in sp.rename_from() {
-                let src = n.clone();
-                let isrc = src.to_icase();
-                if defined_labels.contains(&isrc) {
-                    return Err(ProfileError::LabelRenamed {
-                        label: src,
-                        renamer: name,
-                    });
-                }
-                match renamed_from_to.entry(isrc.clone()) {
-                    Entry::Occupied(oc) => {
-                        return Err(ProfileError::RenameConflict {
-                            renamed: src,
-                            label1: oc.remove(),
-                            label2: name,
-                        });
-                    }
-                    Entry::Vacant(vac) => {
-                        vac.insert(name.clone());
-                    }
-                }
-            }
-            specs2.push(sp);
-        }
-        Ok(Profile {
-            name: name.to_owned(),
-            specs: specs2,
-        })
-    }
-
-    pub(crate) fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub(crate) fn specs(&self) -> &[LabelSpec] {
-        &self.specs
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct TopOptions {
     #[serde(default = "default_profile")]
@@ -245,25 +179,6 @@ pub(crate) enum ConfigError {
     },
 }
 
-#[derive(Clone, Debug, Error, Eq, PartialEq)]
-pub(crate) enum ProfileError {
-    #[error(transparent)]
-    Spec(#[from] LabelSpecError),
-    #[error("multiple definitions for label {0:?} in profile")]
-    RepeatedLabel(LabelName),
-    #[error("label {label:?} defined but also would be renamed to {renamer:?}")]
-    LabelRenamed {
-        label: LabelName,
-        renamer: LabelName,
-    },
-    #[error("label {renamed:?} would be renamed to both {label1:?} and {label2:?}")]
-    RenameConflict {
-        renamed: LabelName,
-        label1: LabelName,
-        label2: LabelName,
-    },
-}
-
 fn default_profile() -> String {
     String::from("default")
 }
@@ -293,12 +208,12 @@ mod tests {
             assert_eq!(name, "mine");
         });
         let defprofile = cfg.get_default_profile().unwrap();
-        assert_eq!(defprofile.name, "default");
-        assert_eq!(defprofile.specs.len(), 2);
-        assert_eq!(defprofile.specs[0].name(), "foo");
-        assert!(defprofile.specs[0].rename_from().is_empty());
+        assert_eq!(defprofile.name(), "default");
+        assert_eq!(defprofile.specs().len(), 2);
+        assert_eq!(defprofile.specs()[0].name(), "foo");
+        assert!(defprofile.specs()[0].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[0].options(),
+            defprofile.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("red".parse().unwrap()),
                 description: Some("Foo all the bars".parse().unwrap()),
@@ -308,10 +223,10 @@ mod tests {
                 enforce_case: true,
             }
         );
-        assert_eq!(defprofile.specs[1].name(), "bar");
-        assert!(defprofile.specs[1].rename_from().is_empty());
+        assert_eq!(defprofile.specs()[1].name(), "bar");
+        assert!(defprofile.specs()[1].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[1].options(),
+            defprofile.specs()[1].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("blue".parse().unwrap()),
                 description: Some("Bar all the foos".parse().unwrap()),
@@ -351,12 +266,12 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
-        assert_eq!(defprofile.name, "mine");
-        assert_eq!(defprofile.specs.len(), 2);
-        assert_eq!(defprofile.specs[0].name(), "gnusto");
-        assert!(defprofile.specs[0].rename_from().is_empty());
+        assert_eq!(defprofile.name(), "mine");
+        assert_eq!(defprofile.specs().len(), 2);
+        assert_eq!(defprofile.specs()[0].name(), "gnusto");
+        assert!(defprofile.specs()[0].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[0].options(),
+            defprofile.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("yellow".parse().unwrap()),
                 description: Some("Gnu all the stos".parse().unwrap()),
@@ -366,10 +281,10 @@ mod tests {
                 enforce_case: true,
             }
         );
-        assert_eq!(defprofile.specs[1].name(), "cleesh");
-        assert!(defprofile.specs[1].rename_from().is_empty());
+        assert_eq!(defprofile.specs()[1].name(), "cleesh");
+        assert!(defprofile.specs()[1].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[1].options(),
+            defprofile.specs()[1].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("green".parse().unwrap()),
                 description: Some("Clee all the shs".parse().unwrap()),
@@ -400,12 +315,12 @@ mod tests {
             assert_eq!(name, "default");
         });
         let profile = cfg.get_profile("mine").unwrap();
-        assert_eq!(profile.name, "mine");
-        assert_eq!(profile.specs.len(), 2);
-        assert_eq!(profile.specs[0].name(), "gnusto");
-        assert!(profile.specs[0].rename_from().is_empty());
+        assert_eq!(profile.name(), "mine");
+        assert_eq!(profile.specs().len(), 2);
+        assert_eq!(profile.specs()[0].name(), "gnusto");
+        assert!(profile.specs()[0].rename_from().is_empty());
         assert_eq!(
-            profile.specs[0].options(),
+            profile.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("yellow".parse().unwrap()),
                 description: Some("Gnu all the stos".parse().unwrap()),
@@ -415,10 +330,10 @@ mod tests {
                 enforce_case: true,
             }
         );
-        assert_eq!(profile.specs[1].name(), "cleesh");
-        assert!(profile.specs[1].rename_from().is_empty());
+        assert_eq!(profile.specs()[1].name(), "cleesh");
+        assert!(profile.specs()[1].rename_from().is_empty());
         assert_eq!(
-            profile.specs[1].options(),
+            profile.specs()[1].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("green".parse().unwrap()),
                 description: Some("Clee all the shs".parse().unwrap()),
@@ -465,12 +380,12 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let default = cfg.get_profile("default").unwrap();
-        assert_eq!(default.name, "default");
-        assert_eq!(default.specs.len(), 1);
-        assert_eq!(default.specs[0].name(), "foo");
-        assert!(default.specs[0].rename_from().is_empty());
+        assert_eq!(default.name(), "default");
+        assert_eq!(default.specs().len(), 1);
+        assert_eq!(default.specs()[0].name(), "foo");
+        assert!(default.specs()[0].rename_from().is_empty());
         assert_eq!(
-            default.specs[0].options(),
+            default.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("red".parse().unwrap()),
                 description: Some("Foo all the bars".parse().unwrap()),
@@ -481,11 +396,11 @@ mod tests {
             }
         );
         let custom = cfg.get_profile("custom").unwrap();
-        assert_eq!(custom.name, "custom");
-        assert_eq!(custom.specs[0].name(), "Foo");
-        assert!(custom.specs[0].rename_from().is_empty());
+        assert_eq!(custom.name(), "custom");
+        assert_eq!(custom.specs()[0].name(), "Foo");
+        assert!(custom.specs()[0].rename_from().is_empty());
         assert_eq!(
-            custom.specs[0].options(),
+            custom.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("blue".parse().unwrap()),
                 description: Some("Bar all the foos".parse().unwrap()),
@@ -585,12 +500,12 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
-        assert_eq!(defprofile.name, "default");
-        assert_eq!(defprofile.specs.len(), 2);
-        assert_eq!(defprofile.specs[0].name(), "foo");
-        assert_eq!(defprofile.specs[0].rename_from(), ["food", "drink"]);
+        assert_eq!(defprofile.name(), "default");
+        assert_eq!(defprofile.specs().len(), 2);
+        assert_eq!(defprofile.specs()[0].name(), "foo");
+        assert_eq!(defprofile.specs()[0].rename_from(), ["food", "drink"]);
         assert_eq!(
-            defprofile.specs[0].options(),
+            defprofile.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("red".parse().unwrap()),
                 description: Some("Foo all the bars".parse().unwrap()),
@@ -600,10 +515,10 @@ mod tests {
                 enforce_case: true,
             }
         );
-        assert_eq!(defprofile.specs[1].name(), "bar");
-        assert!(defprofile.specs[1].rename_from().is_empty());
+        assert_eq!(defprofile.specs()[1].name(), "bar");
+        assert!(defprofile.specs()[1].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[1].options(),
+            defprofile.specs()[1].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("blue".parse().unwrap()),
                 description: Some("Bar all the foos".parse().unwrap()),
@@ -654,12 +569,12 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
-        assert_eq!(defprofile.name, "default");
-        assert_eq!(defprofile.specs.len(), 2);
-        assert_eq!(defprofile.specs[0].name(), "foo");
-        assert!(defprofile.specs[0].rename_from().is_empty());
+        assert_eq!(defprofile.name(), "default");
+        assert_eq!(defprofile.specs().len(), 2);
+        assert_eq!(defprofile.specs()[0].name(), "foo");
+        assert!(defprofile.specs()[0].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[0].options(),
+            defprofile.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::default(),
                 description: Some("Foo all the bars".parse().unwrap()),
@@ -669,10 +584,10 @@ mod tests {
                 enforce_case: true,
             }
         );
-        assert_eq!(defprofile.specs[1].name(), "bar");
-        assert!(defprofile.specs[1].rename_from().is_empty());
+        assert_eq!(defprofile.specs()[1].name(), "bar");
+        assert!(defprofile.specs()[1].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[1].options(),
+            defprofile.specs()[1].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("blue".parse().unwrap()),
                 description: None,
@@ -703,12 +618,12 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
-        assert_eq!(defprofile.name, "default");
-        assert_eq!(defprofile.specs.len(), 2);
-        assert_eq!(defprofile.specs[0].name(), "foo");
-        assert!(defprofile.specs[0].rename_from().is_empty());
+        assert_eq!(defprofile.name(), "default");
+        assert_eq!(defprofile.specs().len(), 2);
+        assert_eq!(defprofile.specs()[0].name(), "foo");
+        assert!(defprofile.specs()[0].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[0].options(),
+            defprofile.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("red".parse().unwrap()),
                 description: Some("Foo all the bars".parse().unwrap()),
@@ -718,10 +633,10 @@ mod tests {
                 enforce_case: true,
             }
         );
-        assert_eq!(defprofile.specs[1].name(), "bar");
-        assert!(defprofile.specs[1].rename_from().is_empty());
+        assert_eq!(defprofile.specs()[1].name(), "bar");
+        assert!(defprofile.specs()[1].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[1].options(),
+            defprofile.specs()[1].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("#cccccc".parse().unwrap()),
                 description: Some("Bar all the foos".parse().unwrap()),
@@ -752,12 +667,12 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
-        assert_eq!(defprofile.name, "default");
-        assert_eq!(defprofile.specs.len(), 2);
-        assert_eq!(defprofile.specs[0].name(), "foo");
-        assert!(defprofile.specs[0].rename_from().is_empty());
+        assert_eq!(defprofile.name(), "default");
+        assert_eq!(defprofile.specs().len(), 2);
+        assert_eq!(defprofile.specs()[0].name(), "foo");
+        assert!(defprofile.specs()[0].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[0].options(),
+            defprofile.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("red".parse().unwrap()),
                 description: Some("Foo all the bars".parse().unwrap()),
@@ -767,10 +682,10 @@ mod tests {
                 enforce_case: true,
             }
         );
-        assert_eq!(defprofile.specs[1].name(), "bar");
-        assert!(defprofile.specs[1].rename_from().is_empty());
+        assert_eq!(defprofile.specs()[1].name(), "bar");
+        assert!(defprofile.specs()[1].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[1].options(),
+            defprofile.specs()[1].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("#cccccc".parse().unwrap()),
                 description: Some("Bar all the foos".parse().unwrap()),
@@ -809,12 +724,12 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
-        assert_eq!(defprofile.name, "default");
-        assert_eq!(defprofile.specs.len(), 2);
-        assert_eq!(defprofile.specs[0].name(), "foo");
-        assert!(defprofile.specs[0].rename_from().is_empty());
+        assert_eq!(defprofile.name(), "default");
+        assert_eq!(defprofile.specs().len(), 2);
+        assert_eq!(defprofile.specs()[0].name(), "foo");
+        assert!(defprofile.specs()[0].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[0].options(),
+            defprofile.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Random(vec![
                     "red".parse().unwrap(),
@@ -828,10 +743,10 @@ mod tests {
                 enforce_case: true,
             }
         );
-        assert_eq!(defprofile.specs[1].name(), "bar");
-        assert!(defprofile.specs[1].rename_from().is_empty());
+        assert_eq!(defprofile.specs()[1].name(), "bar");
+        assert!(defprofile.specs()[1].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[1].options(),
+            defprofile.specs()[1].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("orange".parse().unwrap()),
                 description: Some("This is a label.".parse().unwrap()),
@@ -869,12 +784,12 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let default = cfg.get_profile("default").unwrap();
-        assert_eq!(default.name, "default");
-        assert_eq!(default.specs.len(), 1);
-        assert_eq!(default.specs[0].name(), "foo");
-        assert!(default.specs[0].rename_from().is_empty());
+        assert_eq!(default.name(), "default");
+        assert_eq!(default.specs().len(), 1);
+        assert_eq!(default.specs()[0].name(), "foo");
+        assert!(default.specs()[0].rename_from().is_empty());
         assert_eq!(
-            default.specs[0].options(),
+            default.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Random(vec![
                     "blue".parse().unwrap(),
@@ -889,12 +804,12 @@ mod tests {
             }
         );
         let custom = cfg.get_profile("custom").unwrap();
-        assert_eq!(custom.name, "custom");
-        assert_eq!(custom.specs.len(), 1);
-        assert_eq!(custom.specs[0].name(), "Foo");
-        assert!(custom.specs[0].rename_from().is_empty());
+        assert_eq!(custom.name(), "custom");
+        assert_eq!(custom.specs().len(), 1);
+        assert_eq!(custom.specs()[0].name(), "Foo");
+        assert!(custom.specs()[0].rename_from().is_empty());
         assert_eq!(
-            custom.specs[0].options(),
+            custom.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Random(vec![
                     "red".parse().unwrap(),
@@ -924,12 +839,12 @@ mod tests {
         "#};
         let cfg = Config::from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
-        assert_eq!(defprofile.name, "default");
-        assert_eq!(defprofile.specs.len(), 1);
-        assert_eq!(defprofile.specs[0].name(), "foo");
-        assert!(defprofile.specs[0].rename_from().is_empty());
+        assert_eq!(defprofile.name(), "default");
+        assert_eq!(defprofile.specs().len(), 1);
+        assert_eq!(defprofile.specs()[0].name(), "foo");
+        assert!(defprofile.specs()[0].rename_from().is_empty());
         assert_eq!(
-            defprofile.specs[0].options(),
+            defprofile.specs()[0].options(),
             &LabelOptions {
                 color: ColorSpec::Fixed("red".parse().unwrap()),
                 description: Some("Foo all the bars".parse().unwrap()),

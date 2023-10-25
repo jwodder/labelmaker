@@ -1,10 +1,12 @@
 mod client;
 mod config;
 mod labels;
+mod profile;
 
 use crate::client::{GitHub, Repository};
-use crate::config::{Config, Profile, ProfileError};
+use crate::config::Config;
 use crate::labels::*;
+use crate::profile::*;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
 use anyhow::Context;

@@ -1,9 +1,6 @@
 mod labelset;
 pub(crate) use self::labelset::*;
-use crate::config::PartialLabelOptions;
-use clap::ValueEnum;
 use csscolorparser::Color;
-use rand::{seq::SliceRandom, Rng};
 use serde::{
     de::{Deserializer, Unexpected, Visitor},
     ser::Serializer,
@@ -11,31 +8,9 @@ use serde::{
 };
 use serde_with::{serde_as, DeserializeAs, SerializeAs};
 use smartstring::alias::CompactString;
-use std::collections::HashSet;
 use std::fmt;
 use std::ops::Deref;
 use thiserror::Error;
-
-// These are the "default colors" listed when creating a label via GitHub's web
-// UI as of 2023-09-24:
-static DEFAULT_COLORS: &[(u8, u8, u8)] = &[
-    (0x00, 0x52, 0xCC),
-    (0x00, 0x6B, 0x75),
-    (0x0E, 0x8A, 0x16),
-    (0x1D, 0x76, 0xDB),
-    (0x53, 0x19, 0xE7),
-    (0xB6, 0x02, 0x05),
-    (0xBF, 0xD4, 0xF2),
-    (0xBF, 0xDA, 0xDC),
-    (0xC2, 0xE0, 0xC6),
-    (0xC5, 0xDE, 0xF5),
-    (0xD4, 0xC5, 0xF9),
-    (0xD9, 0x3F, 0x0B),
-    (0xE9, 0x96, 0x95),
-    (0xF9, 0xD0, 0xC4),
-    (0xFB, 0xCA, 0x04),
-    (0xFE, 0xF2, 0xC0),
-];
 
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct LabelName(CompactString);
@@ -217,136 +192,6 @@ pub(crate) struct Label {
     pub(crate) description: Option<Description>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct LabelSpec {
-    name: LabelName,
-    // Invariant (enforced on creation): rename_from contains neither
-    // duplicates (*modulo* case) nor the same string as `name` (*modulo* case)
-    rename_from: Vec<LabelName>,
-    options: LabelOptions,
-}
-
-impl LabelSpec {
-    pub(crate) fn new<I>(
-        name: LabelName,
-        rename_from: I,
-        options: LabelOptions,
-    ) -> Result<LabelSpec, LabelSpecError>
-    where
-        I: IntoIterator<Item = LabelName>,
-    {
-        let mut seen = HashSet::from([name.to_icase()]);
-        let mut rename_from2 = Vec::new();
-        for n in rename_from {
-            if unicase::eq(&name, &n) {
-                return Err(LabelSpecError::SelfRename(name));
-            } else if seen.insert(n.to_icase()) {
-                rename_from2.push(n);
-            }
-        }
-        Ok(LabelSpec {
-            name,
-            rename_from: rename_from2,
-            options,
-        })
-    }
-
-    pub(crate) fn name(&self) -> &LabelName {
-        &self.name
-    }
-
-    pub(crate) fn rename_from(&self) -> &[LabelName] {
-        &self.rename_from
-    }
-
-    pub(crate) fn options(&self) -> &LabelOptions {
-        &self.options
-    }
-}
-
-#[derive(Clone, Debug, Error, Eq, PartialEq)]
-pub(crate) enum LabelSpecError {
-    #[error("label {0:?} cannot be renamed from itself")]
-    SelfRename(LabelName),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct LabelOptions {
-    pub(crate) color: ColorSpec,
-    pub(crate) description: Option<Description>,
-    pub(crate) create: bool,
-    pub(crate) update: bool,
-    pub(crate) on_rename_clash: OnRenameClash,
-    pub(crate) enforce_case: bool,
-}
-
-impl LabelOptions {
-    pub(crate) fn with_overrides(&self, popt: &PartialLabelOptions) -> LabelOptions {
-        LabelOptions {
-            color: popt.color.as_ref().unwrap_or(&self.color).clone(),
-            description: popt
-                .description
-                .as_ref()
-                .or(self.description.as_ref())
-                .cloned(),
-            create: *popt.create.as_ref().unwrap_or(&self.create),
-            update: *popt.update.as_ref().unwrap_or(&self.update),
-            on_rename_clash: *popt
-                .on_rename_clash
-                .as_ref()
-                .unwrap_or(&self.on_rename_clash),
-            enforce_case: *popt.enforce_case.as_ref().unwrap_or(&self.enforce_case),
-        }
-    }
-}
-
-impl Default for LabelOptions {
-    fn default() -> LabelOptions {
-        LabelOptions {
-            color: ColorSpec::default(),
-            description: None,
-            create: true,
-            update: true,
-            on_rename_clash: OnRenameClash::default(),
-            enforce_case: true,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum OnRenameClash {
-    /// Do nothing
-    Ignore,
-    /// Emit a warning
-    #[default]
-    Warn,
-    /// Fail with an error
-    Error,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(untagged)]
-pub(crate) enum ColorSpec {
-    Fixed(Color),
-    Random(Vec<Color>),
-}
-
-impl ColorSpec {
-    pub(crate) fn pick<R: Rng>(&self, rng: &mut R) -> Color {
-        match self {
-            ColorSpec::Fixed(c) => c.clone(),
-            ColorSpec::Random(cs) => cs.choose(rng).cloned().unwrap_or_default(),
-        }
-    }
-}
-
-impl Default for ColorSpec {
-    fn default() -> ColorSpec {
-        ColorSpec::Random(DEFAULT_COLORS.iter().map(|&rgb| Color::from(rgb)).collect())
-    }
-}
-
 pub(crate) fn hashless_rgb(color: &Color) -> String {
     let [r, g, b, _] = color.to_rgba8();
     format!("{:02x}{:02x}{:02x}", r, g, b)
@@ -467,14 +312,6 @@ mod tests {
             let expected = format!(r#"{{"color":"{s}"}}"#);
             assert_eq!(serde_json::to_string(&obj).unwrap(), expected);
         }
-
-        #[test]
-        fn default_color_spec() {
-            let ColorSpec::Random(colors) = ColorSpec::default() else {
-                panic!("ColorSpec::default() was not Random");
-            };
-            assert_eq!(colors.len(), DEFAULT_COLORS.len());
-        }
     }
 
     mod description {
@@ -523,67 +360,6 @@ mod tests {
             );
             let after_json = serde_json::json!({"description": after}).to_string();
             assert_eq!(serde_json::to_string(&cntr).unwrap(), after_json);
-        }
-    }
-
-    mod label_spec {
-        use super::*;
-        use assert_matches::assert_matches;
-
-        #[test]
-        fn simple() {
-            let opts = LabelOptions {
-                color: ColorSpec::Fixed("turquoise".parse().unwrap()),
-                description: Some("A label for labelling".parse().unwrap()),
-                ..LabelOptions::default()
-            };
-            let spec = LabelSpec::new(
-                "foo".parse().unwrap(),
-                ["bar".parse().unwrap(), "baz".parse().unwrap()],
-                opts.clone(),
-            )
-            .unwrap();
-            assert_eq!(spec.name(), "foo");
-            assert_eq!(spec.rename_from(), ["bar", "baz"]);
-            assert_eq!(spec.options, opts);
-        }
-
-        #[test]
-        fn duplicate_rename_from() {
-            let opts = LabelOptions {
-                color: ColorSpec::Fixed("turquoise".parse().unwrap()),
-                description: Some("A label for labelling".parse().unwrap()),
-                ..LabelOptions::default()
-            };
-            let spec = LabelSpec::new(
-                "foo".parse().unwrap(),
-                [
-                    "BAR".parse().unwrap(),
-                    "baz".parse().unwrap(),
-                    "Bar".parse().unwrap(),
-                ],
-                opts.clone(),
-            )
-            .unwrap();
-            assert_eq!(spec.name(), "foo");
-            assert_eq!(spec.rename_from(), ["BAR", "baz"]);
-            assert_eq!(spec.options, opts);
-        }
-
-        #[test]
-        fn rename_from_self() {
-            let r = LabelSpec::new(
-                "foo".parse().unwrap(),
-                [
-                    "BAR".parse().unwrap(),
-                    "baz".parse().unwrap(),
-                    "Foo".parse().unwrap(),
-                ],
-                LabelOptions::default(),
-            );
-            assert_matches!(r, Err(LabelSpecError::SelfRename(name)) => {
-                assert_eq!(name, "foo");
-            });
         }
     }
 }
