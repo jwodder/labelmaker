@@ -108,7 +108,7 @@ impl Command {
                 config,
                 repository,
             } => {
-                let cfg = Config::load(&config).context("error loading config file")?;
+                let cfg = Config::load(&config)?;
                 let profile = match profile {
                     Some(p) => cfg.get_profile(&p)?,
                     None => cfg.get_default_profile()?,
@@ -143,8 +143,7 @@ impl Command {
                 log::debug!("Fetching current labels for {repo} ...");
                 let labels = Repository::new(&client, repo).get_labels().await?;
                 let cfg = Config::from_labels(profile, labels);
-                cfg.dump(outfile)
-                    .context("failed outputting configuration")?;
+                cfg.dump(outfile)?;
             }
             Command::Make(make) => make.run(client).await?,
         }
