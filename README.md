@@ -109,6 +109,9 @@ default value included for use as a reference.
   default, output is written to standard output, which can also be selected by
   supplying `-` as the outfile name.
 
+  The format (JSON, JSON5, TOML, or YAML) of the output is determined based on
+  the file's extension.  When outputting to standard output, JSON is produced.
+
 - `-P NAME`/`--profile NAME` — Set the name of the profile to place the labels
   under in the generated configuration file.  The configuration file's default
   profile will also be set to this value.  [default: `default`]
@@ -169,30 +172,36 @@ with a configuration profile containing a single label entry.
 Configuration File
 ------------------
 
-The configuration file is a [TOML](https://toml.io) file with the following
+`labelmaker`'s configuration file may be written in [JSON][], [JSON5][],
+[TOML][], or [YAML][]; the file type is determined automatically based on the
+file extension.  The file contains a top-level mapping with the following
 fields:
 
-- `[defaults]` — A table of default label settings to apply to all labels in
+[JSON]: https://www.json.org
+[JSON5]: https://json5.org
+[TOML]: https://toml.io
+[YAML]: https://yaml.org
+
+- `defaults` — A mapping of default label settings to apply to all labels in
   this configuration file.  Any field that can be set on a label can be set
   here, other than `name` and `rename-from`.  File-wide defaults can be
-  overridden for specific profiles via the `[profiles.*.defaults]` tables.
+  overridden for specific profiles via the `profiles.*.defaults` mappings.
 
-    - The `[defaults]` table may also contain a `profile` string field
+    - The `defaults` mapping may also contain a `profile` string field
       specifying the default profile for `apply` to use when no `--profile`
       option is given; the default profile is `default`.
 
-- `[profiles.<name>]` — The configuration file may contain multiple *profiles*,
-  different sets of label definitions that can be selected when invoking
-  `apply`.  Each profile is defined by a table with the following fields:
+- `profiles` — A mapping from profile names to profile definitions.  A
+  *profile* is a set of label definitions that can be selected when invoking
+  `apply`.  Each profile is defined by a mapping with the following fields:
 
-    - `[profile.<name>.defaults]` — A table of default label settings to apply
-      to all labels in this profile.  Any field that can be set on a label can
-      be set here, other than `name` and `rename-from`.  Settings set here
-      override settings set in the top-level `[defaults]` table for the labels
-      in this profile.
+    - `defaults` — A mapping of default label settings to apply to all labels
+      in this profile.  Any field that can be set on a label can be set here,
+      other than `name` and `rename-from`.  Settings set here override settings
+      set in the top-level `defaults` mapping for the labels in this profile.
 
-    - `[[profiles.<profile>.labels]]` — A list of label specifications; each
-      one is a table with the following fields:
+    - `labels` — A list of label specifications; each one is a mapping with the
+      following fields:
 
         - `name` *(required)* — The name of the label.  Leading & trailing
           whitespace will be trimmed; if the resulting string is empty, is it
@@ -215,7 +224,7 @@ fields:
           `["#000000"]`.
 
           The default `color` value is a list of the default colors displayed
-          when creating a new label in the GitHub UI as of 2023-09-24.
+          when creating a new label in the GitHub web UI as of 2023-09-24.
 
         - `description` — The description to apply to the label.  If this is
           not set, the description will be empty when creating the label, and
@@ -261,10 +270,12 @@ fields:
             - `"warn"` *(default)* — Emit a warning.
             - `"error"` — Fail with an error.
 
+[CSS color names]: https://www.w3.org/TR/css-color-4/#named-colors
+
 ### Example Configuration File
 
-This shows the default GitHub labels as of 2023-10-18, along with the default
-value of the `color` setting:
+The following TOML configuration shows the default GitHub labels as of
+2023-10-18, along with the default value of the `color` setting:
 
 ```toml
 [defaults]
@@ -287,50 +298,110 @@ color = [
     "fef2c0",
 ]
 
-[[profile.default.label]]
+[[profiles.default.labels]]
 name = "bug"
 color = "d73a4a"
 description = "Something isn't working"
 
-[[profile.default.label]]
+[[profiles.default.labels]]
 name = "documentation"
 color = "0075ca"
 description = "Improvements or additions to documentation"
 
-[[profile.default.label]]
+[[profiles.default.labels]]
 name = "duplicate"
 color = "cfd3d7"
 description = "This issue or pull request already exists"
 
-[[profile.default.label]]
+[[profiles.default.labels]]
 name = "enhancement"
 color = "a2eeef"
 description = "New feature or request"
 
-[[profile.default.label]]
+[[profiles.default.labels]]
 name = "good first issue"
 color = "7057ff"
 description = "Good for newcomers"
 
-[[profile.default.label]]
+[[profiles.default.labels]]
 name = "help wanted"
 color = "008672"
 description = "Extra attention is needed"
 
-[[profile.default.label]]
+[[profiles.default.labels]]
 name = "invalid"
 color = "e4e669"
 description = "This doesn't seem right"
 
-[[profile.default.label]]
+[[profiles.default.labels]]
 name = "question"
 color = "d876e3"
 description = "Further information is requested"
 
-[[profile.default.label]]
+[[profiles.default.labels]]
 name = "wontfix"
 color = "ffffff"
 description = "This will not be worked on"
 ```
 
-[CSS color names]: https://www.w3.org/TR/css-color-4/#named-colors
+That same configuration, in YAML:
+
+```yaml
+defaults:
+  color:
+    - "0052cc"
+    - "006b75"
+    - "0e8a16"
+    - "1d76db"
+    - "5319e7"
+    - "b60205"
+    - "bfd4f2"
+    - "bfdadc"
+    - "c2e0c6"
+    - "c5def5"
+    - "d4c5f9"
+    - "d93f0b"
+    - "e99695"
+    - "f9d0c4"
+    - "fbca04"
+    - "fef2c0"
+
+profiles:
+  default:
+    labels:
+      - name: bug
+        color: "d73a4a"
+        description: Something isn't working
+
+      - name: documentation
+        color: "0075ca"
+        description: Improvements or additions to documentation
+
+      - name: duplicate
+        color: "cfd3d7"
+        description: This issue or pull request already exists
+
+      - name: enhancement
+        color: "a2eeef"
+        description: New feature or request
+
+      - name: good first issue
+        color: "7057ff"
+        description: Good for newcomers
+
+      - name: help wanted
+        color: "008672"
+        description: Extra attention is needed
+
+      - name: invalid
+        color: "e4e669"
+        description: This doesn't seem right
+
+      - name: question
+        color: "d876e3"
+        description: Further information is requested
+
+      - name: wontfix
+        color: "ffffff"
+        description: This will not be worked on
+```
