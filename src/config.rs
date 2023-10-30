@@ -174,8 +174,8 @@ mod tests {
     use assert_matches::assert_matches;
     use indoc::indoc;
 
-    fn from_toml(s: &str) -> Result<Config, toml::de::Error> {
-        toml::from_str::<Config>(s)
+    fn from_toml(s: &str) -> Result<Config, cfgfifo::DeserializeError> {
+        cfgfifo::Format::Toml.load_from_str::<Config>(s)
     }
 
     #[test]
@@ -936,14 +936,31 @@ mod tests {
             },
         ];
         let cfg = Config::from_labels(String::from("test"), labels);
-        let toml = toml::to_string(&cfg).unwrap();
+        let toml = cfgfifo::Format::Toml.dump_to_string(&cfg).unwrap();
         eprintln!("{toml}");
         assert_eq!(
             toml,
             indoc! {r#"
             [defaults]
             profile = "test"
-            color = ["0052cc", "006b75", "0e8a16", "1d76db", "5319e7", "b60205", "bfd4f2", "bfdadc", "c2e0c6", "c5def5", "d4c5f9", "d93f0b", "e99695", "f9d0c4", "fbca04", "fef2c0"]
+            color = [
+                "0052cc",
+                "006b75",
+                "0e8a16",
+                "1d76db",
+                "5319e7",
+                "b60205",
+                "bfd4f2",
+                "bfdadc",
+                "c2e0c6",
+                "c5def5",
+                "d4c5f9",
+                "d93f0b",
+                "e99695",
+                "f9d0c4",
+                "fbca04",
+                "fef2c0",
+            ]
 
             [[profiles.test.labels]]
             name = "Foo"

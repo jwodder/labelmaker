@@ -686,7 +686,6 @@ dependencies = [
  "smartstring",
  "thiserror",
  "tokio",
- "toml",
  "unicase",
  "url",
 ]
