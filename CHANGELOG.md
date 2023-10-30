@@ -1,5 +1,5 @@
-v0.4.0 (in development)
------------------------
+v0.4.0 (2023-10-30)
+-------------------
 - Support JSON, JSON5, and YAML configuration files
 - Fix example TOML configuration in README
 
