@@ -1,8 +1,9 @@
 use crate::labels::*;
 use crate::profile::*;
+use patharg::OutputArg;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -15,17 +16,7 @@ pub(crate) struct Config {
 
 impl Config {
     pub(crate) fn load<P: AsRef<Path>>(path: P) -> Result<Config, ConfigError> {
-        match std::fs::read_to_string(&path) {
-            Ok(s) => Config::from_toml(&s),
-            Err(source) => Err(ConfigError::Read {
-                path: path.as_ref().to_owned(),
-                source,
-            }),
-        }
-    }
-
-    pub(crate) fn from_toml(s: &str) -> Result<Config, ConfigError> {
-        toml::from_str::<Config>(s).map_err(ConfigError::from)
+        cfgfifo::load::<Config, _>(&path).map_err(Into::into)
     }
 
     pub(crate) fn from_labels(profile: String, mut labels: Vec<Label>) -> Config {
@@ -59,17 +50,15 @@ impl Config {
         }
     }
 
-    pub(crate) fn to_toml(&self) -> Result<String, ConfigError> {
-        toml::to_string(self).map_err(Into::into)
-    }
-
-    pub(crate) fn dump(&self, outfile: patharg::OutputArg) -> Result<(), ConfigError> {
-        match outfile.write(self.to_toml()?) {
-            Ok(()) => Ok(()),
-            Err(source) => Err(ConfigError::Write {
-                path: outfile,
-                source,
-            }),
+    pub(crate) fn dump(&self, outfile: OutputArg) -> Result<(), ConfigError> {
+        match outfile {
+            OutputArg::Stdout => {
+                let writer = std::io::stdout().lock();
+                cfgfifo::Format::Json
+                    .dump_to_writer(writer, self)
+                    .map_err(ConfigError::DumpStdout)
+            }
+            OutputArg::Path(p) => cfgfifo::dump(p, self).map_err(Into::into),
         }
     }
 
@@ -163,24 +152,16 @@ pub(crate) struct PartialLabelSpec {
 
 #[derive(Debug, Error)]
 pub(crate) enum ConfigError {
-    #[error("failed to read file {}", .path.display())]
-    Read {
-        path: PathBuf,
-        source: std::io::Error,
-    },
+    #[error("failed to load configuration")]
+    Load(#[from] cfgfifo::LoadError),
+    #[error("failed to write configuration to file")]
+    Dump(#[from] cfgfifo::DumpError),
+    #[error("failed to write configuration to stdout")]
+    DumpStdout(#[source] cfgfifo::SerializeError),
     #[error("profile not found: {0:?}")]
     NoSuchProfile(String),
     #[error(transparent)]
-    Parse(#[from] toml::de::Error),
-    #[error(transparent)]
     Profile(#[from] ProfileError),
-    #[error("failed serializing configuration")]
-    Serialize(#[from] toml::ser::Error),
-    #[error("failed to write to {path:#}")]
-    Write {
-        path: patharg::OutputArg,
-        source: std::io::Error,
-    },
 }
 
 fn default_profile() -> String {
@@ -192,6 +173,10 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use indoc::indoc;
+
+    fn from_toml(s: &str) -> Result<Config, toml::de::Error> {
+        toml::from_str::<Config>(s)
+    }
 
     #[test]
     fn test_simple_config() {
@@ -206,7 +191,7 @@ mod tests {
             color = "blue"
             description = "Bar all the foos"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let r = cfg.get_profile("mine");
         assert_matches!(r, Err(ConfigError::NoSuchProfile(name)) => {
             assert_eq!(name, "mine");
@@ -268,7 +253,7 @@ mod tests {
             color = "green"
             description = "Clee all the shs"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
         assert_eq!(defprofile.name(), "mine");
         assert_eq!(defprofile.specs().len(), 2);
@@ -313,7 +298,7 @@ mod tests {
             color = "green"
             description = "Clee all the shs"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let r = cfg.get_default_profile();
         assert_matches!(r, Err(ConfigError::NoSuchProfile(name)) => {
             assert_eq!(name, "default");
@@ -362,7 +347,7 @@ mod tests {
             color = "blue"
             description = "Bar all the foos"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let r = cfg.get_default_profile();
         assert_matches!(r, Err(ConfigError::Profile(ProfileError::RepeatedLabel(name))) => {
             assert_eq!(name, "Foo");
@@ -382,7 +367,7 @@ mod tests {
             color = "blue"
             description = "Bar all the foos"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let default = cfg.get_profile("default").unwrap();
         assert_eq!(default.name(), "default");
         assert_eq!(default.specs().len(), 1);
@@ -430,7 +415,7 @@ mod tests {
             color = "blue"
             description = "Bar all the foos"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let r = cfg.get_default_profile();
         assert_matches!(r, Err(ConfigError::Profile(ProfileError::LabelRenamed { label, renamer })) => {
             assert_eq!(label, "BAR");
@@ -452,7 +437,7 @@ mod tests {
             description = "Bar all the foos"
             rename-from = ["foo"]
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let r = cfg.get_default_profile();
         assert_matches!(r, Err(ConfigError::Profile(ProfileError::LabelRenamed { label, renamer })) => {
             assert_eq!(label, "foo");
@@ -475,7 +460,7 @@ mod tests {
             description = "Bar all the foos"
             rename-from = ["quux"]
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let r = cfg.get_default_profile();
         assert_matches!(r, Err(ConfigError::Profile(ProfileError::RenameConflict {
             renamed,
@@ -502,7 +487,7 @@ mod tests {
             color = "blue"
             description = "Bar all the foos"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
         assert_eq!(defprofile.name(), "default");
         assert_eq!(defprofile.specs().len(), 2);
@@ -548,7 +533,7 @@ mod tests {
             color = "blue"
             description = "Bar all the foos"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let r = cfg.get_default_profile();
         assert_matches!(r, Err(ConfigError::Profile(ProfileError::Spec(LabelSpecError::SelfRename(name)))) => {
             assert_eq!(name, "foo");
@@ -571,7 +556,7 @@ mod tests {
             enforce-case = false
             on-rename-clash = "ignore"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
         assert_eq!(defprofile.name(), "default");
         assert_eq!(defprofile.specs().len(), 2);
@@ -620,7 +605,7 @@ mod tests {
             description = "Bar all the foos"
             create = true
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
         assert_eq!(defprofile.name(), "default");
         assert_eq!(defprofile.specs().len(), 2);
@@ -669,7 +654,7 @@ mod tests {
             description = "Bar all the foos"
             create = true
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
         assert_eq!(defprofile.name(), "default");
         assert_eq!(defprofile.specs().len(), 2);
@@ -726,7 +711,7 @@ mod tests {
             on-rename-clash = "warn"
             enforce-case = false
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
         assert_eq!(defprofile.name(), "default");
         assert_eq!(defprofile.specs().len(), 2);
@@ -786,7 +771,73 @@ mod tests {
             name = "Foo"
             description = "Bar all the foos"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
+        let default = cfg.get_profile("default").unwrap();
+        assert_eq!(default.name(), "default");
+        assert_eq!(default.specs().len(), 1);
+        assert_eq!(default.specs()[0].name(), "foo");
+        assert!(default.specs()[0].rename_from().is_empty());
+        assert_eq!(
+            default.specs()[0].options(),
+            &LabelOptions {
+                color: ColorSpec::Random(vec![
+                    "blue".parse().unwrap(),
+                    "yellow".parse().unwrap(),
+                    "purple".parse().unwrap(),
+                ]),
+                description: Some("Foo all the bars".parse().unwrap()),
+                create: true,
+                update: true,
+                on_rename_clash: OnRenameClash::default(),
+                enforce_case: false,
+            }
+        );
+        let custom = cfg.get_profile("custom").unwrap();
+        assert_eq!(custom.name(), "custom");
+        assert_eq!(custom.specs().len(), 1);
+        assert_eq!(custom.specs()[0].name(), "Foo");
+        assert!(custom.specs()[0].rename_from().is_empty());
+        assert_eq!(
+            custom.specs()[0].options(),
+            &LabelOptions {
+                color: ColorSpec::Random(vec![
+                    "red".parse().unwrap(),
+                    "green".parse().unwrap(),
+                    "blue".parse().unwrap(),
+                ]),
+                description: Some("Bar all the foos".parse().unwrap()),
+                create: false,
+                update: false,
+                on_rename_clash: OnRenameClash::default(),
+                enforce_case: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_different_profiles_different_defaults_yaml() {
+        let s = indoc! {r#"
+            defaults:
+              color: [red, green, blue]
+              update: false
+              enforce-case: false
+            profiles:
+              default:
+                defaults:
+                  color: white
+                  update: true
+                labels:
+                  - name: foo
+                    color: [blue, yellow, purple]
+                    description: Foo all the bars
+              custom:
+                defaults:
+                  create: false
+                labels:
+                  - name: Foo
+                    description: Bar all the foos
+        "#};
+        let cfg = cfgfifo::Format::Yaml.load_from_str::<Config>(s).unwrap();
         let default = cfg.get_profile("default").unwrap();
         assert_eq!(default.name(), "default");
         assert_eq!(default.specs().len(), 1);
@@ -841,7 +892,7 @@ mod tests {
             color = "red"
             description = "Foo all the bars"
         "#};
-        let cfg = Config::from_toml(s).unwrap();
+        let cfg = from_toml(s).unwrap();
         let defprofile = cfg.get_default_profile().unwrap();
         assert_eq!(defprofile.name(), "default");
         assert_eq!(defprofile.specs().len(), 1);
@@ -885,7 +936,7 @@ mod tests {
             },
         ];
         let cfg = Config::from_labels(String::from("test"), labels);
-        let toml = cfg.to_toml().unwrap();
+        let toml = toml::to_string(&cfg).unwrap();
         eprintln!("{toml}");
         assert_eq!(
             toml,
@@ -912,6 +963,73 @@ mod tests {
             [[profiles.test.labels]]
             name = "no-desc"
             color = "008000"
+        "#}
+        );
+    }
+
+    #[test]
+    fn test_labels2yaml() {
+        let labels = vec![
+            Label {
+                name: "Foo".parse().unwrap(),
+                color: "red".parse().unwrap(),
+                description: Some("Foo all the bars".parse().unwrap()),
+            },
+            Label {
+                name: "bar".parse().unwrap(),
+                color: "blue".parse().unwrap(),
+                description: Some("Bar all the foos".parse().unwrap()),
+            },
+            Label {
+                name: "no-desc".parse().unwrap(),
+                color: "green".parse().unwrap(),
+                description: None,
+            },
+            Label {
+                name: "empty-desc".parse().unwrap(),
+                color: "yellow".parse().unwrap(),
+                description: Some("".parse().unwrap()),
+            },
+        ];
+        let cfg = Config::from_labels(String::from("test"), labels);
+        let yaml = cfgfifo::Format::Yaml.dump_to_string(&cfg).unwrap();
+        eprintln!("{yaml}");
+        assert_eq!(
+            yaml,
+            indoc! {r#"
+            defaults:
+              profile: test
+              color:
+              - 0052cc
+              - 006b75
+              - 0e8a16
+              - 1d76db
+              - '5319e7'
+              - b60205
+              - bfd4f2
+              - bfdadc
+              - c2e0c6
+              - c5def5
+              - d4c5f9
+              - d93f0b
+              - e99695
+              - f9d0c4
+              - fbca04
+              - fef2c0
+            profiles:
+              test:
+                labels:
+                - name: Foo
+                  color: ff0000
+                  description: Foo all the bars
+                - name: bar
+                  color: 0000ff
+                  description: Bar all the foos
+                - name: empty-desc
+                  color: ffff00
+                  description: ''
+                - name: no-desc
+                  color: '008000'
         "#}
         );
     }
