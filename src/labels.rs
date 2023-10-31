@@ -185,7 +185,8 @@ impl<'de> Deserialize<'de> for Description {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(s.parse::<Description>().unwrap())
+        Ok(s.parse::<Description>()
+            .expect("Infallible FromStr should never fail"))
     }
 }
 
