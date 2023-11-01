@@ -39,7 +39,7 @@ The `labelmaker` command has the following subcommands, each detailed below:
 
 Each command takes an argument or option for indicating what GitHub
 repositories to operate on.  A repository can be specified in the form
-`OWNER/NAME` (or, when `OWNER` is the authenticating user, just `NAME`) or as a
+`OWNER/NAME` (or, when `OWNER` is the authenticated user, just `NAME`) or as a
 GitHub repository URL.  If no repository is specified on the command line, then
 the current directory must belong to a Git repository whose `origin` remote
 points to a GitHub repository; `labelmaker` will operate on this remote

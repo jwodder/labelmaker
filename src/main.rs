@@ -67,7 +67,7 @@ enum Command {
         /// The GitHub repositories to operate on.
         ///
         /// Repositories can be specified in the form `OWNER/NAME` (or, when
-        /// `OWNER` is the authenticating user, just `NAME`) and/or as GitHub
+        /// `OWNER` is the authenticated user, just `NAME`) and/or as GitHub
         /// repository URLs.
         ///
         /// If no repositories are specified, then the GitHub repository for
@@ -89,7 +89,7 @@ enum Command {
         /// The GitHub repository to operate on.
         ///
         /// The repository can be specified in the form `OWNER/NAME` (or, when
-        /// `OWNER` is the authenticating user, just `NAME`) or as a GitHub
+        /// `OWNER` is the authenticated user, just `NAME`) or as a GitHub
         /// repository URL.
         ///
         /// If not specified, then the GitHub repository for the local Git
@@ -218,7 +218,7 @@ struct Make {
     /// The GitHub repository to operate on.
     ///
     /// The repository can be specified in the form `OWNER/NAME` (or, when
-    /// `OWNER` is the authenticating user, just `NAME`) or as a GitHub
+    /// `OWNER` is the authenticated user, just `NAME`) or as a GitHub
     /// repository URL.
     ///
     /// If not specified, then the GitHub repository for the local Git
@@ -312,7 +312,7 @@ impl<'a> RepoParser<'a> {
                 self.client
                     .whoami()
                     .await
-                    .context("unable to determine authenticating user's login name")?,
+                    .context("unable to determine authenticated user's login name")?,
             );
         }
         Ok(self.whoami.as_deref().expect("whoami should be Some now"))
