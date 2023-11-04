@@ -71,7 +71,6 @@ impl GitHub {
         url: Url,
         payload: Option<&T>,
     ) -> Result<Response, RequestError> {
-        log::trace!("{} {}", method, url);
         if MUTATING_METHODS.contains(&method) {
             if let Some(lastmut) = self.last_mutation.get() {
                 let delay = MUTATION_DELAY
@@ -94,6 +93,7 @@ impl GitHub {
             let req = req
                 .try_clone()
                 .expect("non-streaming requests should be clonable");
+            log::trace!("{} {}", method, url);
             let resp = req.send().await;
             let desc = match resp {
                 Ok(ref r) => format!("Server returned {} response", r.status()),
