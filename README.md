@@ -37,13 +37,12 @@ The `labelmaker` command has the following subcommands, each detailed below:
 
 - `make` — Create or update a single label
 
-Each command takes an argument or option for indicating what GitHub
+Each subcommand takes an argument or option for indicating what GitHub
 repositories to operate on.  A repository can be specified in the form
 `OWNER/NAME` (or, when `OWNER` is the authenticated user, just `NAME`) or as a
-GitHub repository URL.  If no repository is specified on the command line, then
-the current directory must belong to a Git repository whose `origin` remote
-points to a GitHub repository; `labelmaker` will operate on this remote
-repository.
+GitHub repository URL.  If no repository is supplied, then the current
+directory must belong to a Git repository whose `origin` remote points to a
+GitHub repository; `labelmaker` will operate on this remote repository.
 
 Global Options
 --------------
@@ -84,6 +83,10 @@ made.
 
 - `--dry-run` — Do not change anything in GitHub, but do emit log messages
   showing what would be changed.
+
+- `-F FILE`/`--repo-file FILE` — Also operate on all repositories listed in the
+  given file.  Repositories must be listed one per line.  Leading & trailing
+  whitespace is ignored.  Blank lines and lines starting with `#` are skipped.
 
 - `-P NAME`/`--profile NAME` — Specify which profile in the configuration file
   to use.  Defaults to the value of `defaults.profile` in the configuration

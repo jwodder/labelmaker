@@ -4,6 +4,8 @@ v0.5.0 (in development)
   message about sleeping before mutating requests
 - The log message emitted before each API request is now repeated on each retry
   attempt
+- `apply`: Added a `--repo-file` option for reading repositories to operate on
+  from a file
 
 v0.4.0 (2023-10-30)
 -------------------

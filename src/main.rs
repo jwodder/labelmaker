@@ -13,7 +13,7 @@ use anyhow::Context;
 use clap::{builder::ArgAction, Args, Parser, Subcommand};
 use ghrepo::{GHRepo, LocalRepo};
 use log::{Level, LevelFilter};
-use std::io;
+use std::io::{self, BufRead};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -60,6 +60,14 @@ enum Command {
         #[arg(short = 'P', long, value_name = "NAME")]
         profile: Option<String>,
 
+        /// Also operate on all repositories listed in the given file.
+        ///
+        /// Repositories must be listed one per line.  Leading & trailing
+        /// whitespace is ignored.  Blank lines and lines starting with '#' are
+        /// skipped.
+        #[arg(short = 'F', long, value_name = "FILE")]
+        repo_file: Option<PathBuf>,
+
         /// A configuration file describing what labels to create and/or update
         /// in each repository
         config: PathBuf,
@@ -105,8 +113,9 @@ impl Command {
             Command::Apply {
                 dry_run,
                 profile,
+                repo_file,
                 config,
-                repository,
+                mut repository,
             } => {
                 let cfg = Config::load(&config)?;
                 let profile = match profile {
@@ -114,6 +123,18 @@ impl Command {
                     None => cfg.get_default_profile()?,
                 };
                 let mut repo_parser = RepoParser::new(&client);
+                if let Some(p) = repo_file {
+                    let fp = std::fs::File::open(&p)
+                        .with_context(|| format!("failed to open {}", p.display()))?;
+                    for ln in io::BufReader::new(fp).lines() {
+                        let ln =
+                            ln.with_context(|| format!("failed to read from {}", p.display()))?;
+                        let ln = ln.trim();
+                        if !(ln.is_empty() || ln.starts_with('#')) {
+                            repository.push(ln.to_owned());
+                        }
+                    }
+                }
                 let repos = if repository.is_empty() {
                     vec![repo_parser.default()?]
                 } else {
