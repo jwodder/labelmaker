@@ -32,7 +32,7 @@ patharg = "0.3.0"
 rand = "0.8.5"
 reqwest = { version = "0.11.22", features = ["json"] }
 serde = { version = "1.0.190", features = ["derive"] }
-serde_json = "1.0.107"
+serde_json = "1.0.108"
 smartstring = "1.0.1"
 thiserror = "1.0.50"
 tokio = { version = "1.33.0", features = ["rt", "macros", "time"] }
