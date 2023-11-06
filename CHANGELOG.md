@@ -1,5 +1,9 @@
 v0.5.0 (in development)
 -----------------------
+- The log message emitted before each API request is now emitted after the log
+  message about sleeping before mutating requests
+- The log message emitted before each API request is now repeated on each retry
+  attempt
 
 v0.4.0 (2023-10-30)
 -------------------
