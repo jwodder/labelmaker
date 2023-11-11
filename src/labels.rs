@@ -123,7 +123,7 @@ impl From<(u8, u8, u8)> for Color {
 
 impl Serialize for Color {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.to_string().serialize(serializer)
+        serializer.collect_str(self)
     }
 }
 
