@@ -382,7 +382,7 @@ fn init_logging(log_level: LevelFilter) {
                 record.level(),
                 message,
                 style.render_reset(),
-            ))
+            ));
         })
         .level(LevelFilter::Info)
         .level_for("labelmaker", log_level)
@@ -398,7 +398,7 @@ mod tests {
 
     #[test]
     fn validate_cli() {
-        Arguments::command().debug_assert()
+        Arguments::command().debug_assert();
     }
 
     mod cli_make {

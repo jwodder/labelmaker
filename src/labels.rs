@@ -24,7 +24,7 @@ impl LabelName {
 }
 
 impl fmt::Debug for LabelName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }
@@ -78,10 +78,10 @@ impl<'de> Deserialize<'de> for LabelName {
     {
         struct LabelNameVisitor;
 
-        impl<'de> Visitor<'de> for LabelNameVisitor {
+        impl Visitor<'_> for LabelNameVisitor {
             type Value = LabelName;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                 formatter.write_str("a label name (neither empty nor all-whitespace)")
             }
 
@@ -103,15 +103,15 @@ impl<'de> Deserialize<'de> for LabelName {
 pub(crate) struct Color(csscolorparser::Color);
 
 impl fmt::Debug for Color {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, r#""{}""#, self)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, r#""{self}""#)
     }
 }
 
 impl fmt::Display for Color {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let [r, g, b, _] = self.0.to_rgba8();
-        write!(f, "{:02x}{:02x}{:02x}", r, g, b)
+        write!(f, "{r:02x}{g:02x}{b:02x}")
     }
 }
 
@@ -142,7 +142,7 @@ impl<'de> Deserialize<'de> for Color {
 pub(crate) struct Description(String);
 
 impl fmt::Debug for Description {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }
@@ -246,7 +246,7 @@ mod tests {
             assert_eq!(name.to_string(), after);
             assert_eq!(AsRef::<str>::as_ref(&name), after);
             assert_eq!(format!("{name:?}"), format!("{after:?}"));
-            let cntr = NameContainer { name: name.clone() };
+            let cntr = NameContainer { name };
             let before_json = serde_json::json!({"name": before}).to_string();
             assert_eq!(
                 serde_json::from_str::<NameContainer>(&before_json).unwrap(),
@@ -339,9 +339,7 @@ mod tests {
             assert_eq!(AsRef::<str>::as_ref(&desc), after);
             assert_eq!(desc.deref(), after);
             assert_eq!(format!("{desc:?}"), format!("{after:?}"));
-            let cntr = DescContainer {
-                description: desc.clone(),
-            };
+            let cntr = DescContainer { description: desc };
             let before_json = serde_json::json!({"description": before}).to_string();
             assert_eq!(
                 serde_json::from_str::<DescContainer>(&before_json).unwrap(),

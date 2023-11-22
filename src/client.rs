@@ -276,7 +276,7 @@ pub(crate) struct LabelMaker<'a, R: rand::Rng> {
     dry_run: bool,
 }
 
-impl<'a, R: rand::Rng> LabelMaker<'a, R> {
+impl<R: rand::Rng> LabelMaker<'_, R> {
     pub(crate) async fn make(&mut self, profile: &Profile) -> Result<(), LabelMakerError> {
         let mut res = Vec::new();
         for s in profile.specs() {

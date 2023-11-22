@@ -54,7 +54,7 @@ impl<R: Rng> LabelSet<R> {
                                 .into_iter()
                                 .map(|c| c.name.clone())
                                 .collect(),
-                        }))
+                        }));
                     }
                     OnRenameClash::Error => {
                         return Err(SpecResolveError::RenameClash {
@@ -119,7 +119,7 @@ impl<R: Rng> Extend<Label> for LabelSet<R> {
         I: IntoIterator<Item = Label>,
     {
         self.data
-            .extend(iter.into_iter().map(|lbl| (lbl.name.to_icase(), lbl)))
+            .extend(iter.into_iter().map(|lbl| (lbl.name.to_icase(), lbl)));
     }
 }
 
@@ -161,8 +161,8 @@ pub(crate) struct LabelOperationMessage<'a> {
     dry_run: bool,
 }
 
-impl<'a> fmt::Display for LabelOperationMessage<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for LabelOperationMessage<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.op {
             LabelOperation::Create(label) => {
                 if self.dry_run {
@@ -200,7 +200,7 @@ impl<'a> fmt::Display for LabelOperationMessage<'a> {
                     if !std::mem::replace(&mut first, false) {
                         write!(f, ", ")?;
                     }
-                    write!(f, "new color: {:?}", c)?;
+                    write!(f, "new color: {c:?}")?;
                 }
                 if let Some(d) = description.as_ref() {
                     if !std::mem::replace(&mut first, false) {
@@ -224,7 +224,7 @@ pub(crate) enum LabelWarning {
 }
 
 impl fmt::Display for LabelWarning {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LabelWarning::RenameClash { label, candidates } => write!(
                 f,
@@ -269,7 +269,7 @@ struct UpdateBuilder<'a> {
 }
 
 impl<'a> UpdateBuilder<'a> {
-    fn new(name: &'a LabelName) -> UpdateBuilder {
+    fn new(name: &'a LabelName) -> UpdateBuilder<'a> {
         UpdateBuilder {
             name,
             new_name: None,

@@ -183,7 +183,7 @@ pub(crate) struct PrettyHttpError {
 }
 
 impl PrettyHttpError {
-    pub(crate) async fn new(method: Method, r: reqwest::Response) -> PrettyHttpError {
+    pub(crate) async fn new(method: Method, r: Response) -> PrettyHttpError {
         let url = r.url().clone();
         let status = r.status();
         // If the response body is JSON, pretty-print it.
@@ -225,7 +225,7 @@ impl PrettyHttpError {
 }
 
 impl fmt::Display for PrettyHttpError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{} request to {} returned {}",

@@ -816,7 +816,7 @@ mod tests {
 
     #[test]
     fn test_different_profiles_different_defaults_yaml() {
-        let s = indoc! {r#"
+        let s = indoc! {"
             defaults:
               color: [red, green, blue]
               update: false
@@ -836,7 +836,7 @@ mod tests {
                 labels:
                   - name: Foo
                     description: Bar all the foos
-        "#};
+        "};
         let cfg = cfgfifo::Format::Yaml.load_from_str::<Config>(s).unwrap();
         let default = cfg.get_profile("default").unwrap();
         assert_eq!(default.name(), "default");
@@ -1013,7 +1013,7 @@ mod tests {
         eprintln!("{yaml}");
         assert_eq!(
             yaml,
-            indoc! {r#"
+            indoc! {"
             defaults:
               profile: test
               color:
@@ -1047,7 +1047,7 @@ mod tests {
                   description: ''
                 - name: no-desc
                   color: '008000'
-        "#}
+        "}
         );
     }
 }
