@@ -31,13 +31,13 @@ parse_link_header = { version = "0.3.3", features = ["url"] }
 patharg = "0.3.0"
 rand = "0.8.5"
 reqwest = { version = "0.11.22", features = ["json"] }
-serde = { version = "1.0.192", features = ["derive"] }
+serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 smartstring = "1.0.1"
 thiserror = "1.0.50"
 tokio = { version = "1.34.0", features = ["rt", "macros", "time"] }
 unicase = "2.7.0"
-url = "2.4.1"
+url = "2.5.0"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
