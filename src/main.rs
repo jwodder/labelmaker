@@ -13,7 +13,7 @@ use anyhow::Context;
 use clap::{builder::ArgAction, Args, Parser, Subcommand};
 use ghrepo::{GHRepo, LocalRepo};
 use log::{Level, LevelFilter};
-use std::io::{self, BufRead};
+use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -66,7 +66,7 @@ enum Command {
         /// whitespace is ignored.  Blank lines and lines starting with '#' are
         /// skipped.
         #[arg(short = 'F', long, value_name = "FILE")]
-        repo_file: Option<PathBuf>,
+        repo_file: Option<patharg::InputArg>,
 
         /// A configuration file describing what labels to create and/or update
         /// in each repository
@@ -124,11 +124,9 @@ impl Command {
                 };
                 let mut repo_parser = RepoParser::new(&client);
                 if let Some(p) = repo_file {
-                    let fp = std::fs::File::open(&p)
-                        .with_context(|| format!("failed to open {}", p.display()))?;
-                    for ln in io::BufReader::new(fp).lines() {
-                        let ln =
-                            ln.with_context(|| format!("failed to read from {}", p.display()))?;
+                    let lines = p.lines().with_context(|| format!("failed to open {p:#}"))?;
+                    for ln in lines {
+                        let ln = ln.with_context(|| format!("failed to read from {p:#}"))?;
                         let ln = ln.trim();
                         if !(ln.is_empty() || ln.starts_with('#')) {
                             repository.push(ln.to_owned());

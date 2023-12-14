@@ -85,8 +85,9 @@ made.
   showing what would be changed.
 
 - `-F FILE`/`--repo-file FILE` — Also operate on all repositories listed in the
-  given file.  Repositories must be listed one per line.  Leading & trailing
-  whitespace is ignored.  Blank lines and lines starting with `#` are skipped.
+  given file (or listed on standard input if `FILE` is `-`).  Repositories must
+  be listed one per line.  Leading & trailing whitespace is ignored.  Blank
+  lines and lines starting with `#` are skipped.
 
 - `-P NAME`/`--profile NAME` — Specify which profile in the configuration file
   to use.  Defaults to the value of `defaults.profile` in the configuration

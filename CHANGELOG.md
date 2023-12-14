@@ -1,3 +1,8 @@
+v0.6.0 (in development)
+-----------------------
+- `apply`: The argument to `--repo-file` can now be `-` to read from standard
+  input
+
 v0.5.0 (2023-11-06)
 -------------------
 - The log message emitted before each API request is now emitted after the log
