@@ -15,13 +15,13 @@ exclude = ["/.*"]
 [dependencies]
 anstream = "0.6.5"
 anstyle = "1.0.4"
-anyhow = "1.0.78"
+anyhow = "1.0.79"
 cfgfifo = { version = "0.2.0", default-features = false, features = ["json", "json5", "toml", "yaml"] }
-clap = { version = "4.4.12", default-features = false, features = ["derive", "error-context", "help", "std", "suggestions", "usage", "wrap_help"] }
+clap = { version = "4.4.13", default-features = false, features = ["derive", "error-context", "help", "std", "suggestions", "usage", "wrap_help"] }
 csscolorparser = { version = "0.6.2", features = ["serde"] }
 derive_more = { version = "0.99.17", default-features = false, features = ["as_ref", "deref", "display", "from_str"] }
 fern = "0.6.2"
-gh-token = "0.1.6"
+gh-token = "0.1.7"
 ghrepo = { version = "0.5.0", default-features = false }
 indenter = "0.3.3"
 itertools = "0.12.0"
@@ -32,9 +32,9 @@ patharg = "0.4.0"
 rand = "0.8.5"
 reqwest = { version = "0.11.23", features = ["json"] }
 serde = { version = "1.0.193", features = ["derive"] }
-serde_json = "1.0.109"
+serde_json = "1.0.111"
 smartstring = "1.0.1"
-thiserror = "1.0.53"
+thiserror = "1.0.56"
 tokio = { version = "1.35.1", features = ["rt", "macros", "time"] }
 unicase = "2.7.0"
 url = "2.5.0"
