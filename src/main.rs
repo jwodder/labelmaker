@@ -11,7 +11,7 @@ use anstream::AutoStream;
 use anstyle::{AnsiColor, Style};
 use anyhow::Context;
 use clap::{builder::ArgAction, Args, Parser, Subcommand};
-use ghrepo::{GHRepo, LocalRepo};
+use ghrepo::{is_valid_name, GHRepo, LocalRepo};
 use log::{Level, LevelFilter};
 use std::io;
 use std::path::PathBuf;
@@ -338,7 +338,7 @@ impl<'a> RepoParser<'a> {
     }
 
     async fn parse(&mut self, s: &str) -> anyhow::Result<GHRepo> {
-        if GHRepo::is_valid_name(s) {
+        if is_valid_name(s) {
             GHRepo::new(self.whoami().await?, s).map_err(Into::into)
         } else {
             s.parse().map_err(Into::into)
