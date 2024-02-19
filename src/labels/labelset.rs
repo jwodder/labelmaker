@@ -4,7 +4,6 @@ use ghrepo::GHRepo;
 use itertools::Itertools; // format()
 use rand::Rng;
 use std::collections::HashMap;
-use std::fmt;
 use std::ops::Deref;
 use thiserror::Error;
 

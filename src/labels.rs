@@ -205,7 +205,6 @@ mod tests {
     mod label_name {
         use super::*;
         use rstest::rstest;
-        use std::convert::AsRef;
 
         #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
         struct NameContainer {
@@ -304,7 +303,6 @@ mod tests {
     mod description {
         use super::*;
         use rstest::rstest;
-        use std::convert::AsRef;
         use std::ops::Deref;
 
         #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
