@@ -40,7 +40,7 @@ impl GitHub {
     pub(crate) fn new(token: &str) -> Result<GitHub, BuildClientError> {
         let api_url = Url::parse(GITHUB_API_URL).expect("GITHUB_API_URL should be a valid URL");
         let mut headers = HeaderMap::new();
-        let mut auth = header::HeaderValue::try_from(format!("Bearer {token}"))
+        let mut auth = HeaderValue::try_from(format!("Bearer {token}"))
             .map_err(BuildClientError::BadAuthHeader)?;
         auth.set_sensitive(true);
         headers.insert(header::AUTHORIZATION, auth);
