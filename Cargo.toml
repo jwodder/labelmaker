@@ -24,7 +24,7 @@ fern = "0.6.2"
 gh-token = "0.1.7"
 ghrepo = { version = "0.6.0", default-features = false }
 indenter = "0.3.3"
-itertools = "0.12.1"
+itertools = "0.13.0"
 log = "0.4.21"
 mime = "0.3.17"
 parse_link_header = { version = "0.3.3", features = ["url"] }
