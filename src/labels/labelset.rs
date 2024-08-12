@@ -160,7 +160,7 @@ pub(crate) struct LabelOperationMessage<'a> {
     dry_run: bool,
 }
 
-impl fmt::Display for LabelOperationMessage<'_> {
+impl Display for LabelOperationMessage<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.op {
             LabelOperation::Create(label) => {
@@ -222,7 +222,7 @@ pub(crate) enum LabelWarning {
     },
 }
 
-impl fmt::Display for LabelWarning {
+impl Display for LabelWarning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LabelWarning::RenameClash { label, candidates } => write!(
