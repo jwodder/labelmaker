@@ -2,7 +2,8 @@ v0.6.0 (in development)
 -----------------------
 - `apply`: The argument to `--repo-file` can now be `-` to read from standard
   input
-- Increased MSRV to 1.75
+- Increased MSRV to 1.81
+- Switched internal HTTP library from `reqwest` to `ureq`
 
 v0.5.0 (2023-11-06)
 -------------------

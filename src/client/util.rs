@@ -1,10 +1,11 @@
 use super::RequestError;
 use indenter::indented;
 use mime::{Mime, JSON};
-use reqwest::{header::HeaderMap, Method, Response, StatusCode};
 use serde_json::{to_string_pretty, value::Value};
+use std::collections::HashMap;
 use std::fmt::{self, Write};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use ureq::Response;
 use url::Url;
 
 // Retry configuration:
@@ -32,8 +33,7 @@ impl Retrier {
         }
     }
 
-    // Takes the return value of a call to `RequestBuilder::send()` that has
-    // not been run through `Response::error_for_status()`.
+    // Takes the return value of a call to `Request::call()` or similar.
     //
     // - If the request was successful (status code and everything), returns
     //   `Ok(RetryDecision::Success(response))`.
@@ -44,19 +44,19 @@ impl Retrier {
     // - If the request was a failure (possibly due to status code) and should
     //   not be retried (possibly due to all retries having been exhausted),
     //   returns an `Err`.
-    pub(super) async fn handle(
+    pub(super) fn handle(
         &mut self,
-        resp: Result<Response, reqwest::Error>,
+        resp: Result<Response, ureq::Error>,
     ) -> Result<RetryDecision, RequestError> {
         self.attempts += 1;
         if self.attempts > RETRIES {
             log::trace!("Retries exhausted");
-            return self.finalize(resp).await;
+            return self.finalize(resp);
         }
         let now = Instant::now();
         if now > self.stop_time {
             log::trace!("Maximum total retry wait time exceeded");
-            return self.finalize(resp).await;
+            return self.finalize(resp);
         }
         let backoff = if self.attempts < 2 {
             // urllib3 says "most errors are resolved immediately by a second
@@ -68,16 +68,10 @@ impl Retrier {
         };
         let backoff = Duration::from_secs_f64(backoff);
         let delay = match resp {
-            Err(ref e) if e.is_builder() => return self.finalize(resp).await,
-            Err(_) => backoff,
-            Ok(r) if r.status() == StatusCode::FORBIDDEN => {
-                let parts = ResponseParts::from_response(r).await;
-                if let Some(v) = parts.headers.get("Retry-After") {
-                    let secs = v
-                        .to_str()
-                        .ok()
-                        .and_then(|s| s.parse::<u64>().ok())
-                        .map(|n| n + 1);
+            Err(ureq::Error::Status(403, r)) => {
+                let parts = ResponseParts::from_response(r);
+                if let Some(v) = parts.header("retry-after") {
+                    let secs = v.parse::<u64>().ok().map(|n| n + 1);
                     if secs.is_some() {
                         log::trace!("Server responded with 403 and Retry-After header");
                     }
@@ -88,15 +82,11 @@ impl Retrier {
                     .is_some_and(|s| s.contains("rate limit"))
                 {
                     if parts
-                        .headers
-                        .get("x-ratelimit-remaining")
-                        .and_then(|v| v.to_str().ok())
-                        == Some("0")
+                        .header("x-ratelimit-remaining")
+                        .is_some_and(|v| v == "0")
                     {
                         if let Some(reset) = parts
-                            .headers
-                            .get("x-ratelimit-reset")
-                            .and_then(|v| v.to_str().ok())
+                            .header("x-ratelimit-reset")
                             .and_then(|s| s.parse::<u64>().ok())
                         {
                             log::trace!("Primary rate limit exceeded; waiting for reset");
@@ -112,63 +102,108 @@ impl Retrier {
                     return self.finalize_parts(parts);
                 }
             }
-            Ok(r) if r.status().is_server_error() => backoff,
-            _ => return self.finalize(resp).await,
+            Err(ureq::Error::Status(code, _)) if code >= 500 => backoff,
+            Err(_) => backoff,
+            Ok(_) => return self.finalize(resp),
         };
         let delay = delay.max(backoff);
         let time_left = self.stop_time.saturating_duration_since(Instant::now());
         Ok(RetryDecision::Retry(delay.clamp(Duration::ZERO, time_left)))
     }
 
-    async fn finalize(
-        &self,
-        resp: Result<Response, reqwest::Error>,
-    ) -> Result<RetryDecision, RequestError> {
+    fn finalize(&self, resp: Result<Response, ureq::Error>) -> Result<RetryDecision, RequestError> {
         match resp {
-            Ok(r) if r.status().is_client_error() || r.status().is_server_error() => Err(
-                RequestError::Status(Box::new(PrettyHttpError::new(self.method.clone(), r).await)),
-            ),
             Ok(r) => Ok(RetryDecision::Success(r)),
-            Err(source) => Err(RequestError::Send {
-                method: self.method.clone(),
+            Err(ureq::Error::Status(_, r)) => {
+                Err(RequestError::Status(PrettyHttpError::new(self.method, r)))
+            }
+            Err(ureq::Error::Transport(source)) => Err(RequestError::Send {
+                method: self.method,
                 url: self.url.clone(),
-                source,
+                source: Box::new(source),
             }),
         }
     }
 
     fn finalize_parts<T>(&self, parts: ResponseParts) -> Result<T, RequestError> {
-        Err(RequestError::Status(Box::new(PrettyHttpError::from_parts(
-            self.method.clone(),
+        Err(RequestError::Status(PrettyHttpError::from_parts(
+            self.method,
             self.url.clone(),
             parts,
-        ))))
+        )))
     }
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub(super) enum RetryDecision {
     Success(Response),
     Retry(Duration),
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Method {
+    Get,
+    Post,
+    Patch,
+    //Put,
+    //Delete,
+}
+
+impl Method {
+    pub(super) fn is_mutating(&self) -> bool {
+        matches!(
+            self,
+            Method::Post | Method::Patch /*| Method::Put | Method::Delete*/
+        )
+    }
+
+    pub(super) fn as_str(&self) -> &'static str {
+        match self {
+            Method::Get => "GET",
+            Method::Post => "POST",
+            Method::Patch => "PATCH",
+            //Method::Put => "PUT",
+            //Method::Delete => "DELETE",
+        }
+    }
+}
+
+impl fmt::Display for Method {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ResponseParts {
-    status: StatusCode,
-    headers: HeaderMap,
+    status: u16,
+    // Keys are lowercased:
+    headers: HashMap<String, String>,
     text: Option<String>,
 }
 
 impl ResponseParts {
-    async fn from_response(r: Response) -> ResponseParts {
+    fn from_response(r: Response) -> ResponseParts {
         let status = r.status();
-        let headers = r.headers().clone();
-        let text = r.text().await.ok();
+        let mut headers = HashMap::new();
+        for name in r.headers_names() {
+            if let Some(value) = r.header(&name) {
+                headers.insert(name, value.to_owned());
+            }
+        }
+        let text = r.into_string().ok();
         ResponseParts {
             status,
             headers,
             text,
         }
+    }
+
+    fn header(&self, s: &str) -> Option<&str> {
+        self.headers
+            .get(&s.to_ascii_lowercase())
+            .map(String::as_str)
     }
 }
 
@@ -177,22 +212,22 @@ impl ResponseParts {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PrettyHttpError {
     method: Method,
-    url: Url,
-    status: StatusCode,
+    url: String,
+    status: u16,
     body: Option<String>,
 }
 
 impl PrettyHttpError {
-    pub(crate) async fn new(method: Method, r: Response) -> PrettyHttpError {
-        let url = r.url().clone();
+    pub(super) fn new(method: Method, r: Response) -> PrettyHttpError {
+        let url = r.get_url().to_owned();
         let status = r.status();
         // If the response body is JSON, pretty-print it.
         let body = if is_json_response(&r) {
-            r.json::<Value>().await.ok().map(|v| {
+            r.into_json::<Value>().ok().map(|v| {
                 to_string_pretty(&v).expect("Re-JSONifying a JSON response should not fail")
             })
         } else {
-            r.text().await.ok()
+            r.into_string().ok()
         };
         PrettyHttpError {
             method,
@@ -205,7 +240,11 @@ impl PrettyHttpError {
     fn from_parts(method: Method, url: Url, parts: ResponseParts) -> PrettyHttpError {
         let status = parts.status;
         // If the response body is JSON, pretty-print it.
-        let body = if has_json_content_type(&parts.headers) {
+        let body = if parts
+            .headers
+            .get("content-type")
+            .is_some_and(|v| is_json_content_type(v))
+        {
             parts
                 .text
                 .and_then(|s| serde_json::from_str::<Value>(&s).ok())
@@ -217,7 +256,7 @@ impl PrettyHttpError {
         };
         PrettyHttpError {
             method,
-            url,
+            url: url.into(),
             status,
             body,
         }
@@ -242,7 +281,7 @@ impl std::error::Error for PrettyHttpError {}
 
 /// Return the `rel="next"` URL, if any, from the response's "Link" header
 pub(crate) fn get_next_link(r: &Response) -> Option<Url> {
-    let header_value = r.headers().get(reqwest::header::LINK)?.to_str().ok()?;
+    let header_value = r.header("Link")?;
     parse_link_header::parse_with_rel(header_value)
         .ok()?
         .get("next")
@@ -252,17 +291,13 @@ pub(crate) fn get_next_link(r: &Response) -> Option<Url> {
 /// Returns `true` iff the response's Content-Type header indicates the body is
 /// JSON
 fn is_json_response(r: &Response) -> bool {
-    has_json_content_type(r.headers())
+    r.header("Content-Type").is_some_and(is_json_content_type)
 }
 
-fn has_json_content_type(headers: &HeaderMap) -> bool {
-    headers
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse::<Mime>().ok())
-        .is_some_and(|ct| {
-            ct.type_() == "application" && (ct.subtype() == "json" || ct.suffix() == Some(JSON))
-        })
+fn is_json_content_type(ct_value: &str) -> bool {
+    ct_value.parse::<Mime>().ok().is_some_and(|ct| {
+        ct.type_() == "application" && (ct.subtype() == "json" || ct.suffix() == Some(JSON))
+    })
 }
 
 pub(super) fn urljoin<I>(url: &Url, segments: I) -> Url

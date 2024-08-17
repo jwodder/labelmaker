@@ -3,15 +3,13 @@ use self::util::*;
 use crate::labels::*;
 use crate::profile::Profile;
 use ghrepo::GHRepo;
-use reqwest::{
-    header::{self, HeaderMap, HeaderValue, InvalidHeaderValue},
-    Client, ClientBuilder, Method, Response,
-};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::borrow::Cow;
 use std::cell::Cell;
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use tokio::time::sleep;
+use ureq::{Agent, AgentBuilder, Response};
 use url::Url;
 
 static USER_AGENT: &str = concat!(
@@ -25,100 +23,91 @@ static USER_AGENT: &str = concat!(
 
 static GITHUB_API_URL: &str = "https://api.github.com";
 
-static MUTATING_METHODS: &[Method] = &[Method::POST, Method::PATCH, Method::PUT, Method::DELETE];
-
 const MUTATION_DELAY: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Debug)]
 pub(crate) struct GitHub {
-    client: Client,
+    client: Agent,
     api_url: Url,
     last_mutation: Cell<Option<Instant>>,
 }
 
 impl GitHub {
-    pub(crate) fn new(token: &str) -> Result<GitHub, BuildClientError> {
+    pub(crate) fn new(token: &str) -> GitHub {
         let api_url = Url::parse(GITHUB_API_URL).expect("GITHUB_API_URL should be a valid URL");
-        let mut headers = HeaderMap::new();
-        let mut auth = HeaderValue::try_from(format!("Bearer {token}"))
-            .map_err(BuildClientError::BadAuthHeader)?;
-        auth.set_sensitive(true);
-        headers.insert(header::AUTHORIZATION, auth);
-        headers.insert(
-            header::ACCEPT,
-            HeaderValue::from_static("application/vnd.github+json"),
-        );
-        headers.insert(
-            "X-GitHub-Api-Version",
-            HeaderValue::from_static("2022-11-28"),
-        );
-        let client = ClientBuilder::new()
+        let auth = format!("Bearer {token}");
+        let client = AgentBuilder::new()
             .user_agent(USER_AGENT)
-            .default_headers(headers)
             .https_only(true)
-            .build()
-            .map_err(BuildClientError::Init)?;
-        Ok(GitHub {
+            .middleware(move |req: ureq::Request, next: ureq::MiddlewareNext<'_>| {
+                next.handle(
+                    req.set("Authorization", &auth)
+                        .set("Accept", "application/vnd.github+json")
+                        .set("X-GitHub-Api-Version", "2022-11-28"),
+                )
+            })
+            .build();
+        GitHub {
             client,
             api_url,
             last_mutation: Cell::new(None),
-        })
+        }
     }
 
-    async fn raw_request<T: Serialize>(
+    fn raw_request<T: Serialize>(
         &self,
         method: Method,
         url: Url,
         payload: Option<&T>,
     ) -> Result<Response, RequestError> {
-        if MUTATING_METHODS.contains(&method) {
+        if method.is_mutating() {
             if let Some(lastmut) = self.last_mutation.get() {
                 let delay = MUTATION_DELAY
                     .saturating_sub(Instant::now().saturating_duration_since(lastmut));
                 if !delay.is_zero() {
                     log::trace!("Sleeping for {delay:?} between mutating requests");
-                    sleep(delay).await;
+                    sleep(delay);
                 }
             }
         }
-        let mut req = self.client.request(method.clone(), url.clone());
-        if let Some(p) = payload {
-            req = req.json(p);
-        }
-        let mut retrier = Retrier::new(method.clone(), url.clone());
+        let req = self.client.request_url(method.as_str(), &url);
+        let mut retrier = Retrier::new(method, url.clone());
         loop {
-            if MUTATING_METHODS.contains(&method) {
+            if method.is_mutating() {
                 self.last_mutation.set(Some(Instant::now()));
             }
-            let req = req
-                .try_clone()
-                .expect("non-streaming requests should be clonable");
-            log::trace!("{} {}", method, url);
-            let resp = req.send().await;
-            let desc = match resp {
-                Ok(ref r) => format!("Server returned {} response", r.status()),
-                Err(ref e) => format!("Request failed: {e}"),
+            let req = req.clone();
+            log::trace!("{} {}", method.as_str(), url);
+            let resp = if let Some(p) = payload {
+                req.send_json(p)
+            } else {
+                req.call()
             };
-            match retrier.handle(resp).await? {
+            let desc = match &resp {
+                Ok(_) => Cow::from("Request succeeded"),
+                Err(ureq::Error::Status(code, _)) => {
+                    Cow::from(format!("Server returned {code} response"))
+                }
+                Err(e) => Cow::from(format!("Request failed: {e}")),
+            };
+            match retrier.handle(resp)? {
                 RetryDecision::Success(r) => return Ok(r),
                 RetryDecision::Retry(delay) => {
                     log::warn!("{desc}; waiting {delay:?} and retrying");
-                    sleep(delay).await;
+                    sleep(delay);
                 }
             }
         }
     }
 
-    async fn request<T: Serialize, U: DeserializeOwned>(
+    fn request<T: Serialize, U: DeserializeOwned>(
         &self,
         method: Method,
         url: Url,
         payload: Option<&T>,
     ) -> Result<U, RequestError> {
-        let r = self
-            .raw_request::<T>(method.clone(), url.clone(), payload)
-            .await?;
-        match r.json::<U>().await {
+        let r = self.raw_request::<T>(method, url.clone(), payload)?;
+        match r.into_json::<U>() {
             Ok(val) => Ok(val),
             Err(source) => Err(RequestError::Deserialize {
                 method,
@@ -128,39 +117,36 @@ impl GitHub {
         }
     }
 
-    async fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, RequestError> {
-        self.request::<(), T>(Method::GET, url, None).await
+    fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, RequestError> {
+        self.request::<(), T>(Method::Get, url, None)
     }
 
-    async fn post<T: Serialize, U: DeserializeOwned>(
+    fn post<T: Serialize, U: DeserializeOwned>(
         &self,
         url: Url,
         payload: &T,
     ) -> Result<U, RequestError> {
-        self.request::<T, U>(Method::POST, url, Some(payload)).await
+        self.request::<T, U>(Method::Post, url, Some(payload))
     }
 
-    async fn patch<T: Serialize, U: DeserializeOwned>(
+    fn patch<T: Serialize, U: DeserializeOwned>(
         &self,
         url: Url,
         payload: &T,
     ) -> Result<U, RequestError> {
-        self.request::<T, U>(Method::PATCH, url, Some(payload))
-            .await
+        self.request::<T, U>(Method::Patch, url, Some(payload))
     }
 
-    async fn paginate<T: DeserializeOwned>(&self, mut url: Url) -> Result<Vec<T>, RequestError> {
+    fn paginate<T: DeserializeOwned>(&self, mut url: Url) -> Result<Vec<T>, RequestError> {
         let mut items = Vec::new();
         loop {
-            let r = self
-                .raw_request::<()>(Method::GET, url.clone(), None)
-                .await?;
+            let r = self.raw_request::<()>(Method::Get, url.clone(), None)?;
             let next_url = get_next_link(&r);
-            match r.json::<Vec<T>>().await {
+            match r.into_json::<Vec<T>>() {
                 Ok(page) => items.extend(page),
                 Err(source) => {
                     return Err(RequestError::Deserialize {
-                        method: Method::GET,
+                        method: Method::Get,
                         url,
                         source,
                     })
@@ -173,14 +159,11 @@ impl GitHub {
         }
     }
 
-    pub(crate) async fn whoami(&self) -> Result<String, RequestError> {
-        Ok(self
-            .get::<User>(urljoin(&self.api_url, ["user"]))
-            .await?
-            .login)
+    pub(crate) fn whoami(&self) -> Result<String, RequestError> {
+        Ok(self.get::<User>(urljoin(&self.api_url, ["user"]))?.login)
     }
 
-    pub(crate) async fn get_label_maker<R: rand::Rng>(
+    pub(crate) fn get_label_maker<R: rand::Rng>(
         &self,
         repo: GHRepo,
         rng: R,
@@ -189,7 +172,7 @@ impl GitHub {
         log::debug!("Fetching current labels for {repo} ...");
         let repo = Repository::new(self, repo);
         let mut labels = LabelSet::new(rng);
-        labels.extend(repo.get_labels().await?);
+        labels.extend(repo.get_labels()?);
         Ok(LabelMaker {
             repo,
             labels,
@@ -218,23 +201,18 @@ impl<'a> Repository<'a> {
         }
     }
 
-    pub(crate) async fn get_labels(&self) -> Result<Vec<Label>, RequestError> {
-        self.client.paginate::<Label>(self.labels_url.clone()).await
+    pub(crate) fn get_labels(&self) -> Result<Vec<Label>, RequestError> {
+        self.client.paginate::<Label>(self.labels_url.clone())
     }
 
-    async fn create_label(&self, label: Label) -> Result<Label, RequestError> {
+    fn create_label(&self, label: Label) -> Result<Label, RequestError> {
         self.client
             .post::<Label, Label>(self.labels_url.clone(), &label)
-            .await
     }
 
-    async fn update_label(
-        &self,
-        label: LabelName,
-        payload: UpdateLabel,
-    ) -> Result<Label, RequestError> {
+    fn update_label(&self, label: LabelName, payload: UpdateLabel) -> Result<Label, RequestError> {
         let url = urljoin(&self.labels_url, [label]);
-        self.client.patch::<UpdateLabel, Label>(url, &payload).await
+        self.client.patch::<UpdateLabel, Label>(url, &payload)
     }
 }
 
@@ -244,28 +222,20 @@ struct User {
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum BuildClientError {
-    #[error("could not construct Authorization header value from token")]
-    BadAuthHeader(#[source] InvalidHeaderValue),
-    #[error("failed to initialize HTTP client")]
-    Init(#[source] reqwest::Error),
-}
-
-#[derive(Debug, Error)]
 pub(crate) enum RequestError {
     #[error("failed to make {method} request to {url}")]
     Send {
         method: Method,
         url: Url,
-        source: reqwest::Error,
+        source: Box<ureq::Transport>,
     },
     #[error(transparent)]
-    Status(Box<PrettyHttpError>),
+    Status(PrettyHttpError),
     #[error("failed to deserialize response body from {method} request to {url}")]
     Deserialize {
         method: Method,
         url: Url,
-        source: reqwest::Error,
+        source: std::io::Error,
     },
 }
 
@@ -277,7 +247,7 @@ pub(crate) struct LabelMaker<'a, R: rand::Rng> {
 }
 
 impl<R: rand::Rng> LabelMaker<'_, R> {
-    pub(crate) async fn make(&mut self, profile: &Profile) -> Result<(), LabelMakerError> {
+    pub(crate) fn make(&mut self, profile: &Profile) -> Result<(), LabelMakerError> {
         let mut res = Vec::new();
         for s in profile.specs() {
             res.extend(self.labels.resolve(s)?);
@@ -291,7 +261,7 @@ impl<R: rand::Rng> LabelMaker<'_, R> {
                 LabelResolution::Operation(op) => {
                     log::info!("{}", op.as_log_message(&self.repo.repo, self.dry_run));
                     if !self.dry_run {
-                        self.execute(op).await?;
+                        self.execute(op)?;
                     }
                 }
                 LabelResolution::Warning(wrn) => log::warn!("{wrn}"),
@@ -300,10 +270,10 @@ impl<R: rand::Rng> LabelMaker<'_, R> {
         Ok(())
     }
 
-    async fn execute(&mut self, op: LabelOperation) -> Result<(), RequestError> {
+    fn execute(&mut self, op: LabelOperation) -> Result<(), RequestError> {
         match op {
             LabelOperation::Create(label) => {
-                let created = self.repo.create_label(label).await?;
+                let created = self.repo.create_label(label)?;
                 // TODO: Should this do anything if any of the new label's
                 // values are different from what was submitted?
                 self.labels.add(created);
@@ -319,7 +289,7 @@ impl<R: rand::Rng> LabelMaker<'_, R> {
                     color,
                     description,
                 };
-                let updated = self.repo.update_label(name, payload).await?;
+                let updated = self.repo.update_label(name, payload)?;
                 // TODO: Should this do anything if any of the new values are
                 // different from what was submitted?
                 self.labels.add(updated);

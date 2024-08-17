@@ -2,7 +2,7 @@
 name = "labelmaker"
 version = "0.6.0-dev"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.81"
 description = "Create & enforce sets of labels in GitHub repositories"
 authors = ["John Thorvald Wodder II <labelmaker@varonathe.org>"]
 repository = "https://github.com/jwodder/labelmaker"
@@ -30,13 +30,12 @@ mime = "0.3.17"
 parse_link_header = { version = "0.4.0", features = ["url"] }
 patharg = "0.4.0"
 rand = "0.8.5"
-reqwest = { version = "0.12.4", features = ["json"] }
 serde = { version = "1.0.200", features = ["derive"] }
 serde_json = "1.0.116"
 smartstring = "1.0.1"
 thiserror = "2.0.0"
-tokio = { version = "1.37.0", features = ["rt", "macros", "time"] }
 unicase = "2.7.0"
+ureq = { version = "2.10.1", features = ["json"] }
 url = "2.5.0"
 
 [dev-dependencies]
