@@ -27,7 +27,7 @@ indenter = "0.3.3"
 itertools = "0.13.0"
 log = "0.4.21"
 mime = "0.3.17"
-parse_link_header = { version = "0.3.3", features = ["url"] }
+parse_link_header = { version = "0.4.0", features = ["url"] }
 patharg = "0.4.0"
 rand = "0.8.5"
 reqwest = { version = "0.12.4", features = ["json"] }
