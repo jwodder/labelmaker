@@ -1,5 +1,5 @@
-v0.6.0 (in development)
------------------------
+v0.6.0 (2024-12-20)
+-------------------
 - `apply`: The argument to `--repo-file` can now be `-` to read from standard
   input
 - Increased MSRV to 1.81
