@@ -37,11 +37,11 @@ struct Arguments {
 }
 
 impl Arguments {
-    async fn run(self) -> anyhow::Result<()> {
+    fn run(self) -> anyhow::Result<()> {
         init_logging(self.log_level);
         let token = gh_token::get().context("unable to fetch GitHub access token")?;
-        let client = GitHub::new(&token)?;
-        self.command.run(client).await
+        let client = GitHub::new(&token);
+        self.command.run(client)
     }
 }
 
@@ -108,7 +108,7 @@ enum Command {
 }
 
 impl Command {
-    async fn run(self, client: GitHub) -> anyhow::Result<()> {
+    fn run(self, client: GitHub) -> anyhow::Result<()> {
         match self {
             Command::Apply {
                 dry_run,
@@ -138,15 +138,15 @@ impl Command {
                 } else {
                     let mut repos = Vec::with_capacity(repository.len());
                     for s in repository {
-                        repos.push(repo_parser.parse(&s).await?);
+                        repos.push(repo_parser.parse(&s)?);
                     }
                     repos
                 };
                 let mut rng = rand::thread_rng();
                 for r in repos {
                     log::info!("Applying profile {:?} to repository {}", profile.name(), r);
-                    let mut maker = client.get_label_maker(r, &mut rng, dry_run).await?;
-                    maker.make(&profile).await?;
+                    let mut maker = client.get_label_maker(r, &mut rng, dry_run)?;
+                    maker.make(&profile)?;
                 }
             }
             Command::Fetch {
@@ -156,15 +156,15 @@ impl Command {
             } => {
                 let mut repo_parser = RepoParser::new(&client);
                 let repo = match repository {
-                    Some(s) => repo_parser.parse(&s).await?,
+                    Some(s) => repo_parser.parse(&s)?,
                     None => repo_parser.default()?,
                 };
                 log::debug!("Fetching current labels for {repo} ...");
-                let labels = Repository::new(&client, repo).get_labels().await?;
+                let labels = Repository::new(&client, repo).get_labels()?;
                 let cfg = Config::from_labels(profile, labels);
                 cfg.dump(outfile)?;
             }
-            Command::Make(make) => make.run(client).await?,
+            Command::Make(make) => make.run(client)?,
         }
         Ok(())
     }
@@ -259,7 +259,7 @@ struct Make {
 }
 
 impl Make {
-    async fn run(self, client: GitHub) -> anyhow::Result<()> {
+    fn run(self, client: GitHub) -> anyhow::Result<()> {
         let MakeProfile {
             repository,
             dry_run,
@@ -267,14 +267,12 @@ impl Make {
         } = self.into_profile()?;
         let mut repo_parser = RepoParser::new(&client);
         let repo = match repository {
-            Some(s) => repo_parser.parse(&s).await?,
+            Some(s) => repo_parser.parse(&s)?,
             None => repo_parser.default()?,
         };
         client
-            .get_label_maker(repo, rand::thread_rng(), dry_run)
-            .await?
-            .make(&profile)
-            .await?;
+            .get_label_maker(repo, rand::thread_rng(), dry_run)?
+            .make(&profile)?;
         Ok(())
     }
 
@@ -325,21 +323,20 @@ impl<'a> RepoParser<'a> {
         }
     }
 
-    async fn whoami(&mut self) -> anyhow::Result<&str> {
+    fn whoami(&mut self) -> anyhow::Result<&str> {
         if self.whoami.is_none() {
             self.whoami = Some(
                 self.client
                     .whoami()
-                    .await
                     .context("unable to determine authenticated user's login name")?,
             );
         }
         Ok(self.whoami.as_deref().expect("whoami should be Some now"))
     }
 
-    async fn parse(&mut self, s: &str) -> anyhow::Result<GHRepo> {
+    fn parse(&mut self, s: &str) -> anyhow::Result<GHRepo> {
         if is_valid_name(s) {
-            GHRepo::new(self.whoami().await?, s).map_err(Into::into)
+            GHRepo::new(self.whoami()?, s).map_err(Into::into)
         } else {
             s.parse().map_err(Into::into)
         }
@@ -352,9 +349,8 @@ impl<'a> RepoParser<'a> {
     }
 }
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> ExitCode {
-    if let Err(e) = Arguments::parse().run().await {
+fn main() -> ExitCode {
+    if let Err(e) = Arguments::parse().run() {
         log::error!("{e:?}");
         ExitCode::FAILURE
     } else {
