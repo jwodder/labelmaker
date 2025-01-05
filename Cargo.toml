@@ -22,7 +22,7 @@ csscolorparser = { version = "0.7.0", features = ["serde"] }
 derive_more = { version = "1.0.0", default-features = false, features = ["as_ref", "deref", "display", "from_str"] }
 fern = "0.7.0"
 gh-token = "0.1.7"
-ghrepo = { version = "0.6.0", default-features = false }
+ghrepo = "0.7.0"
 indenter = "0.3.3"
 itertools = "0.13.0"
 log = "0.4.21"

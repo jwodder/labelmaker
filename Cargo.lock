@@ -365,9 +365,9 @@ dependencies = [
 
 [[package]]
 name = "ghrepo"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f4bcc4568336df3e33e9015d59b84d05bc91daa2d7d62b02cd90b901105199"
+checksum = "baf04654ce2e303f24a3c4b88b1c616a108302130889894a1e66c1f79d964ccc"
 
 [[package]]
 name = "glob"
