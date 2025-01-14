@@ -1,6 +1,6 @@
 [package]
 name = "labelmaker"
-version = "0.6.0"
+version = "0.6.1-dev"
 edition = "2021"
 rust-version = "1.81"
 description = "Create & enforce sets of labels in GitHub repositories"

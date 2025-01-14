@@ -103,6 +103,7 @@ impl Retrier {
                 }
             }
             Err(ureq::Error::Status(code, _)) if code >= 500 => backoff,
+            Err(ureq::Error::Status(_, _)) => return self.finalize(resp),
             Err(_) => backoff,
             Ok(_) => return self.finalize(resp),
         };

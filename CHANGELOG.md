@@ -1,3 +1,7 @@
+v0.6.1 (in development)
+-----------------------
+- **Bugfix:** Don't retry on 4xx statuses other than 403
+
 v0.6.0 (2024-12-20)
 -------------------
 - `apply`: The argument to `--repo-file` can now be `-` to read from standard
