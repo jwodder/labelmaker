@@ -1,5 +1,5 @@
-v0.6.1 (in development)
------------------------
+v0.6.1 (2025-01-13)
+-------------------
 - **Bugfix:** Don't retry on 4xx statuses other than 403
 
 v0.6.0 (2024-12-20)
