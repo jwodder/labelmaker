@@ -1,7 +1,7 @@
 use crate::config::PartialLabelOptions;
 use crate::labels::*;
 use clap::ValueEnum;
-use rand::{seq::SliceRandom, Rng};
+use rand::{seq::IndexedRandom, Rng};
 use serde::{Deserialize, Serialize};
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 use thiserror::Error;

@@ -142,7 +142,7 @@ impl Command {
                     }
                     repos
                 };
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::rng();
                 for r in repos {
                     log::info!("Applying profile {:?} to repository {}", profile.name(), r);
                     let mut maker = client.get_label_maker(r, &mut rng, dry_run)?;
@@ -271,7 +271,7 @@ impl Make {
             None => repo_parser.default()?,
         };
         client
-            .get_label_maker(repo, rand::thread_rng(), dry_run)?
+            .get_label_maker(repo, rand::rng(), dry_run)?
             .make(&profile)?;
         Ok(())
     }
