@@ -397,7 +397,7 @@ mod tests {
                 res,
                 [LabelResolution::Operation(LabelOperation::Create(Label {
                     name: "quux".parse().unwrap(),
-                    color: "006B75".parse().unwrap(),
+                    color: "E99695".parse().unwrap(),
                     description: None,
                 }))]
             );
