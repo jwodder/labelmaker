@@ -4,6 +4,7 @@ use ghrepo::GHRepo;
 use itertools::Itertools; // format()
 use rand::Rng;
 use std::collections::HashMap;
+use std::fmt;
 use std::ops::Deref;
 use thiserror::Error;
 
@@ -160,7 +161,7 @@ pub(crate) struct LabelOperationMessage<'a> {
     dry_run: bool,
 }
 
-impl Display for LabelOperationMessage<'_> {
+impl fmt::Display for LabelOperationMessage<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.op {
             LabelOperation::Create(label) => {
@@ -222,7 +223,7 @@ pub(crate) enum LabelWarning {
     },
 }
 
-impl Display for LabelWarning {
+impl fmt::Display for LabelWarning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LabelWarning::RenameClash { label, candidates } => write!(
