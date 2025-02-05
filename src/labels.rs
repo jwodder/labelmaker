@@ -41,7 +41,7 @@ impl<'a> PartialEq<&'a str> for LabelName {
     }
 }
 
-impl FromStr for LabelName {
+impl std::str::FromStr for LabelName {
     type Err = ParseLabelNameError;
 
     fn from_str(s: &str) -> Result<LabelName, ParseLabelNameError> {
@@ -108,7 +108,7 @@ impl fmt::Debug for Color {
     }
 }
 
-impl Display for Color {
+impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let [r, g, b, _] = self.0.to_rgba8();
         write!(f, "{r:02x}{g:02x}{b:02x}")
@@ -159,7 +159,7 @@ impl<'a> PartialEq<&'a str> for Description {
     }
 }
 
-impl FromStr for Description {
+impl std::str::FromStr for Description {
     type Err = std::convert::Infallible;
 
     fn from_str(s: &str) -> Result<Description, std::convert::Infallible> {
