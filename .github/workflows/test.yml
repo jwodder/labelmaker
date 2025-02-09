@@ -57,11 +57,14 @@ jobs:
         if: "!startsWith(github.head_ref, 'renovate/')"
         uses: Swatinem/rust-cache@v2
 
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+
       - name: Build crate
-        run: cargo build --all-targets --verbose
+        run: cargo hack --workspace --feature-powerset build --all-targets --verbose
 
       - name: Test crate
-        run: cargo test --verbose
+        run: cargo hack --workspace --feature-powerset test --verbose
 
   minimal-versions:
     runs-on: ubuntu-latest
@@ -88,10 +91,10 @@ jobs:
           tool: cargo-hack,cargo-minimal-versions
 
       - name: Build crate
-        run: cargo minimal-versions --direct build --all-targets --verbose
+        run: cargo minimal-versions --direct --workspace --feature-powerset build --all-targets --verbose
 
       - name: Test crate
-        run: cargo minimal-versions --direct test --verbose
+        run: cargo minimal-versions --direct --workspace --feature-powerset test --verbose
 
   coverage:
     # This is separate from the main tests because cargo-llvm-cov doesn't run
@@ -117,7 +120,7 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Test with coverage
-        run: cargo llvm-cov --all-features --lcov --output-path lcov.info
+        run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -142,10 +145,16 @@ jobs:
         if: "!startsWith(github.head_ref, 'renovate/')"
         uses: Swatinem/rust-cache@v2
 
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+
       - name: Check code
-        run: cargo clippy --all-features --all-targets -- -Dwarnings
+        run: cargo hack --workspace --feature-powerset clippy -- -Dwarnings
+
+      - name: Check tests & examples
+        run: cargo hack --workspace --feature-powerset clippy --tests --examples -- -Dwarnings
 
       - name: Check formatting
-        run: cargo fmt --check
+        run: cargo fmt --all --check
 
 # vim:set et sts=2:
