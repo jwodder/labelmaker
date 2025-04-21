@@ -16,7 +16,7 @@ exclude = ["/.*"]
 anstream = "0.6.14"
 anstyle = "1.0.7"
 anyhow = "1.0.82"
-cfgfifo = { version = "0.2.1", default-features = false, features = ["json", "json5", "toml", "yaml"] }
+cfgfifo = { version = "0.3.0", default-features = false, features = ["json", "json5", "toml", "yaml"] }
 clap = { version = "4.5.4", default-features = false, features = ["derive", "error-context", "help", "std", "suggestions", "usage", "wrap_help"] }
 csscolorparser = { version = "0.7.0", features = ["serde"] }
 derive_more = { version = "2.0.0", default-features = false, features = ["as_ref", "deref", "display", "from_str"] }
