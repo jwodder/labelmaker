@@ -129,9 +129,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cfgfifo"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3f7db8ad50ad32b8ce571c5edff6043ec0685ee4dc3317df710eee3b3224652"
+checksum = "7a297896fa88398edffde06093b9e68a231ea866723b2e88f3d9db485b535ee7"
 dependencies = [
  "json5",
  "serde",
