@@ -1,3 +1,7 @@
+v0.7.0 (in development)
+-----------------------
+- Increased MSRV to 1.82
+
 v0.6.1 (2025-01-13)
 -------------------
 - **Bugfix:** Don't retry on 4xx statuses other than 403
