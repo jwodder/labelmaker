@@ -40,7 +40,7 @@ impl Arguments {
     fn run(self) -> anyhow::Result<()> {
         init_logging(self.log_level);
         let token = gh_token::get().context("unable to fetch GitHub access token")?;
-        let client = GitHub::new(&token);
+        let client = GitHub::new(&token)?;
         self.command.run(client)
     }
 }
@@ -380,6 +380,7 @@ fn init_logging(log_level: LevelFilter) {
         })
         .level(LevelFilter::Info)
         .level_for("labelmaker", log_level)
+        .level_for("minigh", log_level)
         .chain(stderr)
         .apply()
         .expect("no other logger should have been previously initialized");

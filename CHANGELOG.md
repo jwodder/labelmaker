@@ -1,6 +1,7 @@
-v0.7.0 (in development)
+v0.6.2 (in development)
 -----------------------
 - Increased MSRV to 1.82
+- Updated to ureq v3 via `minigh`
 
 v0.6.1 (2025-01-13)
 -------------------
