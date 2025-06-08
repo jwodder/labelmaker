@@ -1,5 +1,5 @@
-v0.6.2 (in development)
------------------------
+v0.6.2 (2025-06-08)
+-------------------
 - Increased MSRV to 1.82
 - Updated to ureq v3 via `minigh`
 
