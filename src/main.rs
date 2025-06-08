@@ -351,7 +351,11 @@ impl<'a> RepoParser<'a> {
 
 fn main() -> ExitCode {
     if let Err(e) = Arguments::parse().run() {
-        log::error!("{e:?}");
+        if let Some(minigh::RequestError::Status(stat)) = e.downcast_ref() {
+            log::error!("{stat:#}");
+        } else {
+            log::error!("{e:?}");
+        }
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
