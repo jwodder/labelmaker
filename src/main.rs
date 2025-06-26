@@ -19,7 +19,7 @@ use std::process::ExitCode;
 
 /// Create & enforce sets of labels in GitHub repositories
 ///
-/// See <https://github.com/jwodder/labelmaker> for more information
+/// Visit <https://github.com/jwodder/labelmaker> for more information.
 #[derive(Clone, Debug, Parser, PartialEq)]
 #[command(version)]
 struct Arguments {
