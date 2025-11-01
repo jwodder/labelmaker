@@ -2,7 +2,7 @@
 name = "labelmaker"
 version = "0.7.0-dev"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.88"
 description = "Create & enforce sets of labels in GitHub repositories"
 authors = ["John Thorvald Wodder II <labelmaker@varonathe.org>"]
 repository = "https://github.com/jwodder/labelmaker"
