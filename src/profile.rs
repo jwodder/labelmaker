@@ -1,9 +1,9 @@
 use crate::config::PartialLabelOptions;
 use crate::labels::*;
 use clap::ValueEnum;
-use rand::{seq::IndexedRandom, Rng};
+use rand::{Rng, seq::IndexedRandom};
 use serde::{Deserialize, Serialize};
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{HashMap, HashSet, hash_map::Entry};
 use thiserror::Error;
 
 // These are the "default colors" listed when creating a label via GitHub's web
