@@ -63,7 +63,7 @@ impl<R: Rng> LabelSet<R> {
                                 .into_iter()
                                 .map(|c| c.name.clone())
                                 .collect(),
-                        })
+                        });
                     }
                 }
             }
@@ -89,15 +89,15 @@ impl<R: Rng> LabelSet<R> {
         };
         if let Some((extant, mut builder)) = updating {
             if spec.options().update {
-                if let ColorSpec::Fixed(ref c) = spec.options().color {
-                    if c != &extant.color {
-                        builder.color(c);
-                    }
+                if let ColorSpec::Fixed(ref c) = spec.options().color
+                    && c != &extant.color
+                {
+                    builder.color(c);
                 }
-                if let Some(ref desc) = spec.options().description {
-                    if desc.deref() != extant.description.as_deref().unwrap_or_default() {
-                        builder.description(desc);
-                    }
+                if let Some(ref desc) = spec.options().description
+                    && desc.deref() != extant.description.as_deref().unwrap_or_default()
+                {
+                    builder.description(desc);
                 }
             }
             res.extend(builder.build());
@@ -975,7 +975,7 @@ mod tests {
                     }),
                 ]
             );
-            let Some(LabelResolution::Warning(ref warn)) = res.first() else {
+            let Some(LabelResolution::Warning(warn)) = res.first() else {
                 unreachable!();
             };
             assert_eq!(

@@ -2,9 +2,9 @@ mod labelset;
 pub(crate) use self::labelset::*;
 use derive_more::{AsRef, Deref, Display, FromStr};
 use serde::{
+    Deserialize, Serialize,
     de::{Deserializer, Unexpected, Visitor},
     ser::Serializer,
-    Deserialize, Serialize,
 };
 use smartstring::alias::CompactString;
 use std::fmt;
