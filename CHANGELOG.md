@@ -1,5 +1,5 @@
-v0.7.0 (in development)
------------------------
+v0.6.3 (2025-11-09)
+-------------------
 - Increased MSRV to 1.88
 - Show bodies of error responses for more failed API requests
 
