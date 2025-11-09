@@ -2,8 +2,7 @@ mod client;
 mod config;
 mod labels;
 mod profile;
-
-use crate::client::{GitHub, Repository};
+use crate::client::{GitHub, LabelMakerError, Repository};
 use crate::config::Config;
 use crate::labels::*;
 use crate::profile::*;
@@ -13,6 +12,7 @@ use anyhow::Context;
 use clap::{Args, Parser, Subcommand, builder::ArgAction};
 use ghrepo::{GHRepo, LocalRepo, is_valid_name};
 use log::{Level, LevelFilter};
+use minigh::RequestError;
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -351,7 +351,10 @@ impl<'a> RepoParser<'a> {
 
 fn main() -> ExitCode {
     if let Err(e) = Arguments::parse().run() {
-        if let Some(minigh::RequestError::Status(stat)) = e.downcast_ref() {
+        if let Some(RequestError::Status(stat)) = e.downcast_ref() {
+            log::error!("{stat:#}");
+        } else if let Some(LabelMakerError::Request(RequestError::Status(stat))) = e.downcast_ref()
+        {
             log::error!("{stat:#}");
         } else {
             log::error!("{e:?}");
