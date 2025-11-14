@@ -5,7 +5,6 @@ use minigh::RequestError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/* <https://github.com/jwodder/minigh/issues/17>
 static USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",
@@ -14,14 +13,18 @@ static USER_AGENT: &str = concat!(
     env!("CARGO_PKG_REPOSITORY"),
     ")",
 );
-*/
 
 #[derive(Clone, Debug)]
 pub(crate) struct GitHub(minigh::Client);
 
 impl GitHub {
     pub(crate) fn new(token: &str) -> Result<GitHub, minigh::BuildClientError> {
-        Ok(GitHub(minigh::Client::new(token)?))
+        Ok(GitHub(
+            minigh::Client::builder()
+                .with_token(token)
+                .with_user_agent(USER_AGENT)
+                .build()?,
+        ))
     }
 
     pub(crate) fn whoami(&self) -> Result<String, RequestError> {

@@ -713,9 +713,9 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "minigh"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d51cdbbf32ee9b20d2f28e6fc0c39705e750bbe76d9315158669804c1aaaaf38"
+checksum = "d91b729dc30ff3709b3a96bc6069687c94ca3fa045c266b88f51a7b14a4108d5"
 dependencies = [
  "indenter",
  "log",
