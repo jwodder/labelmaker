@@ -598,7 +598,7 @@ dependencies = [
 
 [[package]]
 name = "labelmaker"
-version = "0.6.3"
+version = "0.6.4-dev"
 dependencies = [
  "anstream",
  "anstyle",

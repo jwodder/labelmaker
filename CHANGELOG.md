@@ -1,3 +1,7 @@
+v0.6.4 (in development)
+-----------------------
+- Provide pre-built release assets for installation
+
 v0.6.3 (2025-11-09)
 -------------------
 - Increased MSRV to 1.88
