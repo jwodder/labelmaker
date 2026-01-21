@@ -1,5 +1,5 @@
-v0.6.4 (in development)
------------------------
+v0.6.4 (2026-01-21)
+-------------------
 - Provide pre-built release assets for installation
 
 v0.6.3 (2025-11-09)
