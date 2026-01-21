@@ -16,9 +16,28 @@ and point `labelmaker` in the direction of your repositories.
 Installation
 ============
 
-In order to install `labelmaker`, you first need to have [Rust and Cargo
-installed](https://www.rust-lang.org/tools/install).  You can then build the
-latest release of `labelmaker` and install it in `~/.cargo/bin` by running:
+Release Assets
+--------------
+
+Prebuilt binaries for the most common platforms are available as GitHub release
+assets.  [The page for the latest
+release](https://github.com/jwodder/labelmaker/releases/latest) lists these
+under "Assets", along with installer scripts for both Unix-like systems and
+Windows.
+
+As an alternative to the installer scripts, if you have
+[`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall) on your
+system, you can use it to download & install the appropriate release asset for
+your system for the latest version of `labelmaker` by running `cargo binstall
+labelmaker`.
+
+Installing from Source
+----------------------
+
+If you have [Rust and Cargo
+installed](https://www.rust-lang.org/tools/install), you can build the latest
+release of `labelmaker` from source and install it in `~/.cargo/bin` by
+running:
 
     cargo install labelmaker
 
