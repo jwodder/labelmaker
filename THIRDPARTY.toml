@@ -2510,7 +2510,7 @@ SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "clap"
-package_version = "4.5.53"
+package_version = "4.5.54"
 repository = "https://github.com/clap-rs/clap"
 license = "MIT OR Apache-2.0"
 
@@ -2747,7 +2747,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "clap_builder"
-package_version = "4.5.53"
+package_version = "4.5.54"
 repository = "https://github.com/clap-rs/clap"
 license = "MIT OR Apache-2.0"
 
@@ -3221,7 +3221,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "clap_lex"
-package_version = "0.7.6"
+package_version = "0.7.7"
 repository = "https://github.com/clap-rs/clap"
 license = "MIT OR Apache-2.0"
 
@@ -6318,7 +6318,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 [[third_party_libraries]]
 package_name = "flate2"
-package_version = "1.1.5"
+package_version = "1.1.8"
 repository = "https://github.com/rust-lang/flate2-rs"
 license = "MIT OR Apache-2.0"
 
@@ -6802,7 +6802,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "getrandom"
-package_version = "0.2.16"
+package_version = "0.2.17"
 repository = "https://github.com/rust-random/getrandom"
 license = "MIT OR Apache-2.0"
 
@@ -9836,7 +9836,7 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "indexmap"
-package_version = "2.12.1"
+package_version = "2.13.0"
 repository = "https://github.com/indexmap-rs/indexmap"
 license = "Apache-2.0 OR MIT"
 
@@ -11046,7 +11046,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "libc"
-package_version = "0.2.178"
+package_version = "0.2.180"
 repository = "https://github.com/rust-lang/libc"
 license = "MIT OR Apache-2.0"
 
@@ -15001,7 +15001,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "proc-macro2"
-package_version = "1.0.104"
+package_version = "1.0.105"
 repository = "https://github.com/dtolnay/proc-macro2"
 license = "MIT OR Apache-2.0"
 
@@ -15216,7 +15216,7 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "quote"
-package_version = "1.0.42"
+package_version = "1.0.43"
 repository = "https://github.com/dtolnay/quote"
 license = "MIT OR Apache-2.0"
 
@@ -15885,7 +15885,7 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "rand_core"
-package_version = "0.9.3"
+package_version = "0.9.5"
 repository = "https://github.com/rust-random/rand"
 license = "MIT OR Apache-2.0"
 
@@ -17339,7 +17339,7 @@ DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "rustls"
-package_version = "0.23.35"
+package_version = "0.23.36"
 repository = "https://github.com/rustls/rustls"
 license = "Apache-2.0 OR ISC OR MIT"
 
@@ -17601,7 +17601,7 @@ DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "rustls-pki-types"
-package_version = "1.13.2"
+package_version = "1.14.0"
 repository = "https://github.com/rustls/pki-types"
 license = "MIT OR Apache-2.0"
 
@@ -17843,7 +17843,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "rustls-webpki"
-package_version = "0.103.8"
+package_version = "0.103.9"
 repository = "https://github.com/rustls/webpki"
 license = "ISC"
 
@@ -18733,7 +18733,7 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "serde_json"
-package_version = "1.0.148"
+package_version = "1.0.149"
 repository = "https://github.com/serde-rs/json"
 license = "MIT OR Apache-2.0"
 
@@ -20903,7 +20903,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 [[third_party_libraries]]
 package_name = "syn"
-package_version = "2.0.112"
+package_version = "2.0.114"
 repository = "https://github.com/dtolnay/syn"
 license = "MIT OR Apache-2.0"
 
@@ -21373,7 +21373,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "thiserror"
-package_version = "2.0.17"
+package_version = "2.0.18"
 repository = "https://github.com/dtolnay/thiserror"
 license = "MIT OR Apache-2.0"
 
@@ -21588,7 +21588,7 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "thiserror-impl"
-package_version = "2.0.17"
+package_version = "2.0.18"
 repository = "https://github.com/dtolnay/thiserror"
 license = "MIT OR Apache-2.0"
 
@@ -21803,7 +21803,7 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "time"
-package_version = "0.3.44"
+package_version = "0.3.45"
 repository = "https://github.com/time-rs/time"
 license = "MIT OR Apache-2.0"
 
@@ -22015,7 +22015,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "time-core"
-package_version = "0.1.6"
+package_version = "0.1.7"
 repository = "https://github.com/time-rs/time"
 license = "MIT OR Apache-2.0"
 
@@ -22227,7 +22227,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "time-macros"
-package_version = "0.2.24"
+package_version = "0.2.25"
 repository = "https://github.com/time-rs/time"
 license = "MIT OR Apache-2.0"
 
@@ -22496,7 +22496,7 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 
 [[third_party_libraries]]
 package_name = "toml"
-package_version = "0.9.10+spec-1.1.0"
+package_version = "0.9.11+spec-1.1.0"
 repository = "https://github.com/toml-rs/toml"
 license = "MIT OR Apache-2.0"
 
@@ -23893,14 +23893,14 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "unicase"
-package_version = "2.8.1"
+package_version = "2.9.0"
 repository = "https://github.com/seanmonstar/unicase"
 license = "MIT OR Apache-2.0"
 
 [[third_party_libraries.licenses]]
 license = "MIT"
 text = """
-Copyright (c) 2014-2017 Sean McArthur
+Copyright (c) 2014-2026 Sean McArthur
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -25191,7 +25191,7 @@ text = "NOT FOUND"
 
 [[third_party_libraries]]
 package_name = "url"
-package_version = "2.5.7"
+package_version = "2.5.8"
 repository = "https://github.com/servo/rust-url"
 license = "MIT OR Apache-2.0"
 
@@ -26573,7 +26573,7 @@ DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "wasip2"
-package_version = "1.0.1+wasi-0.2.4"
+package_version = "1.0.2+wasi-0.2.9"
 repository = "https://github.com/bytecodealliance/wasi-rs"
 license = "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
 
@@ -27037,7 +27037,7 @@ DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "webpki-roots"
-package_version = "1.0.4"
+package_version = "1.0.5"
 repository = "https://github.com/rustls/webpki-roots"
 license = "CDLA-Permissive-2.0"
 
@@ -32374,7 +32374,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "wit-bindgen"
-package_version = "0.46.0"
+package_version = "0.51.0"
 repository = "https://github.com/bytecodealliance/wit-bindgen"
 license = "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
 
@@ -33010,7 +33010,7 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 
 [[third_party_libraries]]
 package_name = "zerocopy"
-package_version = "0.8.31"
+package_version = "0.8.33"
 repository = "https://github.com/google/zerocopy"
 license = "BSD-2-Clause OR Apache-2.0 OR MIT"
 
@@ -33283,7 +33283,7 @@ DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "zerocopy-derive"
-package_version = "0.8.31"
+package_version = "0.8.33"
 repository = "https://github.com/google/zerocopy"
 license = "BSD-2-Clause OR Apache-2.0 OR MIT"
 
@@ -34080,7 +34080,7 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 
 [[third_party_libraries]]
 package_name = "zmij"
-package_version = "1.0.6"
+package_version = "1.0.16"
 repository = "https://github.com/dtolnay/zmij"
 license = "MIT"
 
