@@ -1,0 +1,41 @@
+[graph]
+targets = []
+all-features = true
+no-default-features = false
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[bans]
+deny = ["serde_yml"]
+multiple-versions = "allow"
+wildcards = "deny"
+
+[licenses]
+version = 2
+allow = [
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "OpenSSL",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Unlicense",
+]
+unused-allowed-license = "allow"
+
+[[licenses.clarify]]
+name = "ring"
+expression = "ISC AND OpenSSL AND MIT"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 }
+]
+
+[sources]
+unknown-git = "deny"
+unknown-registry = "deny"
