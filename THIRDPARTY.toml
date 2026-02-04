@@ -2200,7 +2200,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "bytes"
-package_version = "1.11.0"
+package_version = "1.11.1"
 repository = "https://github.com/tokio-rs/bytes"
 license = "MIT"
 
@@ -2510,7 +2510,7 @@ SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "clap"
-package_version = "4.5.54"
+package_version = "4.5.57"
 repository = "https://github.com/clap-rs/clap"
 license = "MIT OR Apache-2.0"
 
@@ -2747,7 +2747,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "clap_builder"
-package_version = "4.5.54"
+package_version = "4.5.57"
 repository = "https://github.com/clap-rs/clap"
 license = "MIT OR Apache-2.0"
 
@@ -2984,7 +2984,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "clap_derive"
-package_version = "4.5.49"
+package_version = "4.5.55"
 repository = "https://github.com/clap-rs/clap"
 license = "MIT OR Apache-2.0"
 
@@ -4447,7 +4447,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "csscolorparser"
-package_version = "0.8.1"
+package_version = "0.8.2"
 repository = "https://github.com/mazznoer/csscolorparser-rs"
 license = "MIT OR Apache-2.0"
 
@@ -6318,14 +6318,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 [[third_party_libraries]]
 package_name = "flate2"
-package_version = "1.1.8"
+package_version = "1.1.9"
 repository = "https://github.com/rust-lang/flate2-rs"
 license = "MIT OR Apache-2.0"
 
 [[third_party_libraries.licenses]]
 license = "MIT"
 text = """
-Copyright (c) 2014-2025 Alex Crichton
+Copyright (c) 2014-2026 Alex Crichton
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -11263,7 +11263,7 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "libm"
-package_version = "0.2.15"
+package_version = "0.2.16"
 repository = "https://github.com/rust-lang/compiler-builtins"
 license = "MIT"
 
@@ -13079,7 +13079,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "num-conv"
-package_version = "0.1.0"
+package_version = "0.2.0"
 repository = "https://github.com/jhpratt/num-conv"
 license = "MIT OR Apache-2.0"
 
@@ -15001,7 +15001,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "proc-macro2"
-package_version = "1.0.105"
+package_version = "1.0.106"
 repository = "https://github.com/dtolnay/proc-macro2"
 license = "MIT OR Apache-2.0"
 
@@ -15216,7 +15216,7 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "quote"
-package_version = "1.0.43"
+package_version = "1.0.44"
 repository = "https://github.com/dtolnay/quote"
 license = "MIT OR Apache-2.0"
 
@@ -16114,7 +16114,7 @@ APPENDIX: How to apply the Apache License to your work.
 
 [[third_party_libraries]]
 package_name = "regex"
-package_version = "1.12.2"
+package_version = "1.12.3"
 repository = "https://github.com/rust-lang/regex"
 license = "MIT OR Apache-2.0"
 
@@ -16356,7 +16356,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "regex-automata"
-package_version = "0.4.13"
+package_version = "0.4.14"
 repository = "https://github.com/rust-lang/regex"
 license = "MIT OR Apache-2.0"
 
@@ -16598,7 +16598,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "regex-syntax"
-package_version = "0.8.8"
+package_version = "0.8.9"
 repository = "https://github.com/rust-lang/regex"
 license = "MIT OR Apache-2.0"
 
@@ -19647,7 +19647,7 @@ SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "siphasher"
-package_version = "1.0.1"
+package_version = "1.0.2"
 repository = "https://github.com/jedisct1/rust-siphash"
 license = "MIT/Apache-2.0"
 
@@ -19655,7 +19655,7 @@ license = "MIT/Apache-2.0"
 license = "MIT"
 text = """
 Copyright 2012-2016 The Rust Project Developers.
-Copyright 2016-2024 Frank Denis.
+Copyright 2016-2026 Frank Denis.
 
 Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
@@ -19667,7 +19667,7 @@ option.
 license = "Apache-2.0"
 text = """
 Copyright 2012-2016 The Rust Project Developers.
-Copyright 2016-2024 Frank Denis.
+Copyright 2016-2026 Frank Denis.
 
 Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
@@ -21803,7 +21803,7 @@ END OF TERMS AND CONDITIONS
 
 [[third_party_libraries]]
 package_name = "time"
-package_version = "0.3.45"
+package_version = "0.3.46"
 repository = "https://github.com/time-rs/time"
 license = "MIT OR Apache-2.0"
 
@@ -22015,7 +22015,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "time-core"
-package_version = "0.1.7"
+package_version = "0.1.8"
 repository = "https://github.com/time-rs/time"
 license = "MIT OR Apache-2.0"
 
@@ -22227,7 +22227,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "time-macros"
-package_version = "0.2.25"
+package_version = "0.2.26"
 repository = "https://github.com/time-rs/time"
 license = "MIT OR Apache-2.0"
 
@@ -27037,7 +27037,7 @@ DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "webpki-roots"
-package_version = "1.0.5"
+package_version = "1.0.6"
 repository = "https://github.com/rustls/webpki-roots"
 license = "CDLA-Permissive-2.0"
 
@@ -33010,7 +33010,7 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 
 [[third_party_libraries]]
 package_name = "zerocopy"
-package_version = "0.8.33"
+package_version = "0.8.38"
 repository = "https://github.com/google/zerocopy"
 license = "BSD-2-Clause OR Apache-2.0 OR MIT"
 
@@ -33283,7 +33283,7 @@ DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "zerocopy-derive"
-package_version = "0.8.33"
+package_version = "0.8.38"
 repository = "https://github.com/google/zerocopy"
 license = "BSD-2-Clause OR Apache-2.0 OR MIT"
 
@@ -34080,7 +34080,7 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 
 [[third_party_libraries]]
 package_name = "zmij"
-package_version = "1.0.16"
+package_version = "1.0.19"
 repository = "https://github.com/dtolnay/zmij"
 license = "MIT"
 
