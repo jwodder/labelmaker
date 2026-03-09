@@ -2478,7 +2478,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "cfgfifo"
-package_version = "0.7.0"
+package_version = "0.8.0"
 repository = "https://github.com/jwodder/cfgfifo"
 license = "MIT"
 
@@ -2487,7 +2487,7 @@ license = "MIT"
 text = """
 The MIT License (MIT)
 
-Copyright (c) 2023-2025 John Thorvald Wodder II
+Copyright (c) 2023-2026 John Thorvald Wodder II
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23702,7 +23702,7 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 
 [[third_party_libraries]]
 package_name = "toml"
-package_version = "0.9.11+spec-1.1.0"
+package_version = "1.0.6+spec-1.1.0"
 repository = "https://github.com/toml-rs/toml"
 license = "MIT OR Apache-2.0"
 
@@ -23939,7 +23939,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "toml_datetime"
-package_version = "0.7.5+spec-1.1.0"
+package_version = "1.0.0+spec-1.1.0"
 repository = "https://github.com/toml-rs/toml"
 license = "MIT OR Apache-2.0"
 
@@ -24176,7 +24176,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "toml_parser"
-package_version = "1.0.6+spec-1.1.0"
+package_version = "1.0.9+spec-1.1.0"
 repository = "https://github.com/toml-rs/toml"
 license = "MIT OR Apache-2.0"
 
