@@ -13,7 +13,7 @@ categories = ["command-line-utilities"]
 exclude = ["/.*"]
 
 [dependencies]
-anstream = "0.6.14"
+anstream = "1.0.0"
 anstyle = "1.0.7"
 anyhow = "1.0.82"
 cfgfifo = { version = "0.8.0", default-features = false, features = ["json", "json5", "toml", "yaml"] }
