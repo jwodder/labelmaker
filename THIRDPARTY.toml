@@ -16634,7 +16634,7 @@ text = "NOT FOUND"
 
 [[third_party_libraries]]
 package_name = "rand"
-package_version = "0.10.0"
+package_version = "0.10.1"
 repository = "https://github.com/rust-random/rand"
 license = "MIT OR Apache-2.0"
 
