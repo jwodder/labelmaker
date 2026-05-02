@@ -66,7 +66,7 @@ GitHub repository; `labelmaker` will operate on this remote repository.
 Global Options
 --------------
 
-- `-l <level>`, `--log-level <level>` — Set the log level to the given value.
+- `-l LEVEL`, `--log-level LEVEL` — Set the log level to the given value.
   Possible values are "`OFF`", "`ERROR`", "`WARN`", "`INFO`", "`DEBUG`", and
   "`TRACE`" (all case-insensitive).  [default value: `INFO`]
 
