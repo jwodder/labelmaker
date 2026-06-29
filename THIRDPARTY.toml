@@ -1505,7 +1505,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "anyhow"
-package_version = "1.0.102"
+package_version = "1.0.103"
 repository = "https://github.com/dtolnay/anyhow"
 license = "MIT OR Apache-2.0"
 
