@@ -14048,7 +14048,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "minigh"
-package_version = "0.2.0"
+package_version = "0.3.0"
 repository = "https://github.com/jwodder/minigh"
 license = "MIT"
 
@@ -14057,7 +14057,7 @@ license = "MIT"
 text = """
 The MIT License (MIT)
 
-Copyright (c) 2025 John Thorvald Wodder II
+Copyright (c) 2025-2026 John Thorvald Wodder II
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
