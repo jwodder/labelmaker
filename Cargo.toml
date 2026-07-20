@@ -23,7 +23,7 @@ derive_more = { version = "2.0.0", default-features = false, features = ["as_ref
 fern = "0.7.0"
 gh-token = "0.1.7"
 ghrepo = "0.7.0"
-itertools = "0.14.0"
+itertools = "0.15.0"
 log = "0.4.27"
 minigh = "0.2.0"
 patharg = "0.4.0"
