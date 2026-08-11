@@ -1,12 +1,12 @@
 mod labelset;
 pub(crate) use self::labelset::*;
+use compact_str::CompactString;
 use derive_more::{AsRef, Deref, Display, FromStr};
 use serde::{
     Deserialize, Serialize,
     de::{Deserializer, Unexpected, Visitor},
     ser::Serializer,
 };
-use smartstring::alias::CompactString;
 use std::fmt;
 use thiserror::Error;
 
@@ -37,7 +37,7 @@ impl PartialEq<str> for LabelName {
 
 impl<'a> PartialEq<&'a str> for LabelName {
     fn eq(&self, other: &&'a str) -> bool {
-        &self.0 == other
+        self.0 == other
     }
 }
 
