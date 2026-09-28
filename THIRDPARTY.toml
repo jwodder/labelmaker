@@ -4995,7 +4995,7 @@ text = """
 
 [[third_party_libraries]]
 package_name = "csscolorparser"
-package_version = "0.8.4"
+package_version = "0.9.0"
 repository = "https://github.com/mazznoer/csscolorparser-rs"
 license = "MIT OR Apache-2.0"
 
@@ -14864,7 +14864,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "phf"
-package_version = "0.13.1"
+package_version = "0.14.0"
 repository = "https://github.com/rust-phf/rust-phf"
 license = "MIT"
 
@@ -14895,7 +14895,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "phf_generator"
-package_version = "0.13.1"
+package_version = "0.14.0"
 repository = "https://github.com/rust-phf/rust-phf"
 license = "MIT"
 
@@ -14926,7 +14926,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "phf_macros"
-package_version = "0.13.1"
+package_version = "0.14.0"
 repository = "https://github.com/rust-phf/rust-phf"
 license = "MIT"
 
@@ -14957,7 +14957,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [[third_party_libraries]]
 package_name = "phf_shared"
-package_version = "0.13.1"
+package_version = "0.14.0"
 repository = "https://github.com/rust-phf/rust-phf"
 license = "MIT"
 
