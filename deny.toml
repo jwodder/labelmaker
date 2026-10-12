@@ -6,6 +6,11 @@ no-default-features = false
 [advisories]
 version = 2
 yanked = "deny"
+ignore = [
+    # gh-token uses serde-yaml, which uses unsafe-libyaml
+    # <https://github.com/dtolnay/star-history/issues/31>
+    "RUSTSEC-2024-0449",
+]
 
 [bans]
 deny = ["serde_yml"]

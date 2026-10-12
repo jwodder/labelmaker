@@ -1013,41 +1013,41 @@ mod tests {
         eprintln!("{yaml}");
         assert_eq!(
             yaml,
-            indoc! {"
+            indoc! {r#"
             defaults:
               profile: test
               color:
-              - 0052cc
-              - 006b75
-              - 0e8a16
-              - 1d76db
-              - '5319e7'
-              - b60205
-              - bfd4f2
-              - bfdadc
-              - c2e0c6
-              - c5def5
-              - d4c5f9
-              - d93f0b
-              - e99695
-              - f9d0c4
-              - fbca04
-              - fef2c0
+                - 0052cc
+                - 006b75
+                - 0e8a16
+                - 1d76db
+                - "5319e7"
+                - b60205
+                - bfd4f2
+                - bfdadc
+                - c2e0c6
+                - c5def5
+                - d4c5f9
+                - d93f0b
+                - e99695
+                - f9d0c4
+                - fbca04
+                - fef2c0
             profiles:
               test:
                 labels:
-                - name: Foo
-                  color: ff0000
-                  description: Foo all the bars
-                - name: bar
-                  color: 0000ff
-                  description: Bar all the foos
-                - name: empty-desc
-                  color: ffff00
-                  description: ''
-                - name: no-desc
-                  color: '008000'
-        "}
+                  - name: Foo
+                    color: ff0000
+                    description: Foo all the bars
+                  - name: bar
+                    color: 0000ff
+                    description: Bar all the foos
+                  - name: empty-desc
+                    color: ffff00
+                    description: ""
+                  - name: no-desc
+                    color: "008000"
+        "#}
         );
     }
 }
