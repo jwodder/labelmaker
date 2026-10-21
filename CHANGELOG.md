@@ -1,3 +1,7 @@
+v0.6.5 (in development)
+-----------------------
+- Update webpki packages to avoid [eMudhra issue](https://emudhra.we-have-a-problem.com)
+
 v0.6.4 (2026-01-21)
 -------------------
 - Provide pre-built release assets for installation
