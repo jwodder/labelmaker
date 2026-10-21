@@ -1,5 +1,5 @@
-v0.6.5 (in development)
------------------------
+v0.6.5 (2026-10-21)
+-------------------
 - Update webpki packages to avoid [eMudhra issue](https://emudhra.we-have-a-problem.com)
 
 v0.6.4 (2026-01-21)
