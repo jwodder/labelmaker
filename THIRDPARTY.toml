@@ -4756,7 +4756,7 @@ limitations under the License.
 
 [[third_party_libraries]]
 package_name = "crc32fast"
-package_version = "1.5.3"
+package_version = "1.5.4"
 repository = "https://github.com/srijs/rust-crc32fast"
 license = "MIT OR Apache-2.0"
 
