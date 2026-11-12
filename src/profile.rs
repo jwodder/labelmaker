@@ -65,7 +65,7 @@ impl Profile {
                         renamer: name,
                     });
                 }
-                match renamed_from_to.entry(isrc.clone()) {
+                match renamed_from_to.entry(isrc) {
                     Entry::Occupied(oc) => {
                         return Err(ProfileError::RenameConflict {
                             renamed: src,
